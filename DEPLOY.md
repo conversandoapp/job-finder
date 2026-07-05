@@ -40,9 +40,10 @@ git push -u origin main
 ```
 
 Con el `.gitignore` que ya tiene el proyecto, no se suben `backend/.env`,
-`backend/storage/`, `backend/credentials/service_account.json` ni `venv/`
-— así que tus credenciales reales nunca llegan a GitHub. Antes de pushear,
-confirmá con `git status` que ninguno de esos archivos aparece en el commit.
+`backend/storage/` (donde vive `drive_token.json` una vez que conectás
+Drive) ni `venv/` — así que tus credenciales reales nunca llegan a GitHub.
+Antes de pushear, confirmá con `git status` que ninguno de esos archivos
+aparece en el commit.
 
 ---
 
@@ -107,8 +108,8 @@ Notas sobre estas flags:
   archivo. Con una sola instancia evitás ese problema. Si más adelante
   necesitás más tráfico, hay que migrar `sessions.py` a una base de datos
   real (Postgres de Supabase, por ejemplo) para poder escalar sin este límite.
-- No incluí `NOTIFY_EMAIL_APP_PASSWORD` ni `DRIVE_FOLDER_ID` en el primer
-  deploy — los agregamos en el paso 6 si los vas a usar.
+- No incluí `NOTIFY_EMAIL_APP_PASSWORD` ni las variables de Drive en el
+  primer deploy — las agregamos en el paso 6 si las vas a usar.
 
 Cuando termine, te da una URL pública tipo
 `https://job-finder-xxxxx-uc.a.run.app`. Abrila y probá `/index.html`.
@@ -150,19 +151,33 @@ gcloud run services update job-finder `
   --set-env-vars="NOTIFY_EMAIL_ENABLED=true,NOTIFY_EMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx"
 ```
 
-Para Drive, el archivo `service_account.json` no podés subirlo como
-variable de entorno de texto — la forma prolija es Secret Manager:
+Para Drive, ya no se usa una cuenta de servicio (ver README.md — no tienen
+cuota de almacenamiento propia). En vez de eso, el admin conecta su propia
+cuenta de Google por OAuth desde `/admin.html`, así que solo hace falta
+configurar las variables del cliente OAuth (creado como tipo "Aplicación
+web" en Google Cloud Console, con redirect URI apuntando a tu URL de
+Cloud Run + `/api/admin/drive/oauth2callback`):
 
 ```bash
-gcloud secrets create drive-service-account --data-file=backend/credentials/service_account.json
-
 gcloud run services update job-finder `
-  --set-secrets="/app/backend/credentials/service_account.json=drive-service-account:latest" `
-  --set-env-vars="DRIVE_ENABLED=true,DRIVE_FOLDER_ID=el-id-de-tu-carpeta"
+  --set-env-vars="DRIVE_ENABLED=true,DRIVE_OAUTH_CLIENT_ID=xxx.apps.googleusercontent.com,DRIVE_OAUTH_REDIRECT_URI=https://job-finder-xxxxx-uc.a.run.app/api/admin/drive/oauth2callback" `
+  --set-secrets="DRIVE_OAUTH_CLIENT_SECRET=drive-oauth-client-secret:latest"
 ```
 
-Eso monta el secreto como archivo dentro del contenedor, en la misma ruta
-que `DRIVE_CREDENTIALS_PATH` espera por default.
+(El client secret sí conviene guardarlo en Secret Manager en vez de pasarlo
+en texto plano, igual que `NOTIFY_EMAIL_APP_PASSWORD`:
+`gcloud secrets create drive-oauth-client-secret --data-file=-` y pegar el
+valor, o `echo -n "el-secret" | gcloud secrets create drive-oauth-client-secret --data-file=-`.)
+
+Después de desplegar, entrá a `/admin.html` logueado como admin y hacé
+click en "☁️ Conectar Google Drive" una sola vez — el token queda guardado
+en `backend/storage/drive_token.json`, que ya persiste en el bucket montado
+en el paso 5 (se refresca solo de ahí en adelante, sin volver a pedir
+consentimiento salvo que revoques el acceso desde tu cuenta de Google).
+
+`DRIVE_FOLDER_ID` es opcional: si no lo seteás, la app busca o crea sola
+una carpeta "Job Finder - CVs recibidos" en tu Drive la primera vez que
+sube un CV.
 
 ---
 
@@ -200,4 +215,8 @@ secretos para las sensibles) del servicio en vez de un archivo:
 | `NOTIFY_EMAIL_ENABLED` | No | `false` si no configurás email |
 | `NOTIFY_EMAIL_APP_PASSWORD` | No | mejor como Secret Manager |
 | `DRIVE_ENABLED` | No | `false` si no configurás Drive |
-| `DRIVE_FOLDER_ID` | No | |
+| `DRIVE_OAUTH_CLIENT_ID` | No | del cliente OAuth tipo "Aplicación web" |
+| `DRIVE_OAUTH_CLIENT_SECRET` | No | mejor como Secret Manager |
+| `DRIVE_OAUTH_REDIRECT_URI` | No | tu URL de Cloud Run + `/api/admin/drive/oauth2callback` |
+| `DRIVE_TOKEN_PATH` | No | default `backend/storage/drive_token.json`, ya persiste solo |
+| `DRIVE_FOLDER_ID` | No | opcional, se autodetecta/crea si se deja vacío |

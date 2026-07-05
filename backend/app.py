@@ -27,12 +27,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from services import auth, notifications, sessions, storage_drive
+from services import auth, drive_oauth, notifications, sessions, storage_drive
 
 load_dotenv()
 
@@ -207,6 +207,45 @@ async def admin_download_original(session_id: str, user: dict = Depends(auth.req
     for candidate in folder.glob("cv_original.*"):
         return FileResponse(candidate, filename=candidate.name)
     raise HTTPException(404, "No se encontró el CV original")
+
+
+@app.get("/api/admin/drive/authorize")
+async def admin_drive_authorize(user: dict = Depends(auth.require_admin)):
+    """Arma la URL de consentimiento de Google para conectar Drive (ver
+    backend/services/drive_oauth.py). El frontend redirige el navegador ahí."""
+    redirect_uri = os.getenv("DRIVE_OAUTH_REDIRECT_URI", "")
+    if not redirect_uri:
+        raise HTTPException(500, "Falta DRIVE_OAUTH_REDIRECT_URI en el servidor")
+    try:
+        authorize_url = drive_oauth.build_authorize_url(redirect_uri)
+    except Exception as e:
+        raise HTTPException(500, f"No se pudo armar la URL de autorización de Drive: {e}")
+    return {"authorize_url": authorize_url}
+
+
+@app.get("/api/admin/drive/oauth2callback")
+async def admin_drive_oauth2callback(request: Request):
+    """Google redirige acá después del consentimiento. No puede protegerse
+    con el login de admin (es una navegación directa desde Google, sin
+    header Authorization) -- se valida el `state` en su lugar, ver
+    drive_oauth.exchange_code."""
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    error = request.query_params.get("error")
+
+    if error:
+        return HTMLResponse(f"<p>Google devolvió un error: {error}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+    if not code or not state:
+        return HTMLResponse("<p>Faltan parámetros en la redirección de Google.</p>", status_code=400)
+
+    redirect_uri = os.getenv("DRIVE_OAUTH_REDIRECT_URI", "")
+    try:
+        creds = drive_oauth.exchange_code(redirect_uri, code, state)
+        drive_oauth.save_credentials(creds)
+    except Exception as e:
+        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+
+    return HTMLResponse("<p>Google Drive conectado correctamente. Ya podés cerrar esta pestaña.</p>")
 
 
 @app.post("/api/admin/{session_id}/cv")

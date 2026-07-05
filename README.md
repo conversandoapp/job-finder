@@ -114,19 +114,40 @@ Es gratis (Gmail no cobra por esto) y no requiere ningún servicio externo.
 
 ## Activar Google Drive real (opcional)
 
-1. Andá a https://console.cloud.google.com/, creá un proyecto y habilitá
-   "Google Drive API".
-2. Credenciales → "Service Account" → creale una clave JSON.
-3. Guardá ese archivo como `backend/credentials/service_account.json`.
-4. En Google Drive, creá una carpeta (ej. "Job Finder — CVs recibidos"),
-   compartila con el email de la cuenta de servicio (termina en
-   `...iam.gserviceaccount.com`) dándole permiso de Editor.
-5. Copiá el ID de esa carpeta (está en la URL de Drive) y en `backend/.env`:
+Los CVs se pueden subir a tu propio Google Drive (15GB gratis con una
+cuenta Gmail normal, sin necesitar Google Workspace). Usa OAuth 2.0
+delegado a tu propia cuenta — **no** una cuenta de servicio, porque las
+cuentas de servicio no tienen cuota de almacenamiento propia (por eso
+antes fallaba con "Service Accounts do not have storage quota...").
+
+Como el proyecto se despliega directo en Cloud Run (ver `DEPLOY.md`) y no
+hay ejecución local, la autorización de una sola vez se hace enteramente
+contra el servicio ya desplegado, desde el panel admin:
+
+1. Andá a https://console.cloud.google.com/, creá un proyecto (o usá uno
+   existente) y habilitá "Google Drive API".
+2. Pantalla de consentimiento OAuth (OAuth consent screen): tipo
+   "External", Publishing status **"In production"** (¡importante! en
+   "Testing" el refresh token expira a los 7 días). Agregá el scope
+   `https://www.googleapis.com/auth/drive.file`.
+3. Credenciales → "Crear credenciales" → "ID de cliente de OAuth" → tipo
+   "Aplicación web". Como redirect URI autorizado poné
+   `https://TU-URL-DE-CLOUD-RUN/api/admin/drive/oauth2callback`.
+4. En las variables de entorno del servicio (ver `DEPLOY.md`):
    ```
    DRIVE_ENABLED=true
-   DRIVE_FOLDER_ID=el-id-de-la-carpeta
+   DRIVE_OAUTH_CLIENT_ID=el-client-id
+   DRIVE_OAUTH_CLIENT_SECRET=el-client-secret
+   DRIVE_OAUTH_REDIRECT_URI=https://TU-URL-DE-CLOUD-RUN/api/admin/drive/oauth2callback
    ```
-6. Instalá las dependencias de Google (ya están en `requirements.txt`).
+5. Entrá a `/admin.html` logueado como admin y hacé click en "☁️ Conectar
+   Google Drive". Vas a ver un aviso de "app no verificada" — es esperable
+   para un uso personal de un solo usuario, click en "Avanzado" → "Ir a
+   Job Finder (no seguro)". Al aceptar, queda guardado el token.
+
+No hace falta crear ni compartir ninguna carpeta a mano: la primera vez
+que se sube un CV, la app busca (o crea) una carpeta llamada
+"Job Finder - CVs recibidos" en tu Drive.
 
 Sin esto configurado, los CVs igual quedan disponibles en
 `backend/storage/sessions/{session_id}/cv_original.*` — Drive es un extra,

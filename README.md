@@ -93,10 +93,29 @@ Abrí `http://localhost:8000/index.html` — esa es la vista del usuario
 (pide login/registro). Abrí `http://localhost:8000/admin-login.html` para
 entrar a tu panel.
 
-Sin tocar nada más, las notificaciones quedan en
-`backend/storage/notifications.log` (y visibles en la pestaña
-"Notificaciones" del panel admin), y los CVs se guardan en
-`backend/storage/sessions/{session_id}/`.
+Sin tocar nada más, las notificaciones y los CVs quedan guardados en tu
+proyecto de Supabase (tabla `notifications` y bucket de Storage
+`cv-files` — ver "Configurar Supabase" más abajo), y las notificaciones
+también se ven en la pestaña "Notificaciones" del panel admin.
+
+## Configurar Supabase (Postgres + Storage)
+
+Además de auth, el backend usa Supabase para guardar todo (sesiones, CVs,
+notificaciones, el token de Drive) — necesario porque el filesystem del
+servicio desplegado (Render) es efímero. Antes de correr el backend por
+primera vez:
+
+1. En el dashboard de tu proyecto de Supabase (el mismo que ya usás para
+   auth) → **SQL Editor** → pegá y corré el contenido de
+   `backend/supabase/schema.sql`.
+2. **Storage** → creá un bucket llamado `cv-files`, marcado como **privado**
+   (el backend proxea las descargas con permisos propios, un bucket público
+   dejaría cualquier CV accesible por link adivinado).
+3. **Project Settings → API** → copiá la key **`service_role`** (NO la
+   `anon public`) y ponela en `backend/.env` como `SUPABASE_SERVICE_ROLE_KEY`.
+   Es secreta — nunca la mandes al frontend ni la subas a git.
+
+Con eso ya podés levantar el backend normalmente.
 
 ## Activar email real (opcional)
 
@@ -120,8 +139,8 @@ delegado a tu propia cuenta — **no** una cuenta de servicio, porque las
 cuentas de servicio no tienen cuota de almacenamiento propia (por eso
 antes fallaba con "Service Accounts do not have storage quota...").
 
-Como el proyecto se despliega directo en Cloud Run (ver `DEPLOY.md`) y no
-hay ejecución local, la autorización de una sola vez se hace enteramente
+Como el proyecto se despliega directo en Render (ver `DEPLOY.md`) y no hay
+ejecución local, la autorización de una sola vez se hace enteramente
 contra el servicio ya desplegado, desde el panel admin:
 
 1. Andá a https://console.cloud.google.com/, creá un proyecto (o usá uno
@@ -132,13 +151,13 @@ contra el servicio ya desplegado, desde el panel admin:
    `https://www.googleapis.com/auth/drive.file`.
 3. Credenciales → "Crear credenciales" → "ID de cliente de OAuth" → tipo
    "Aplicación web". Como redirect URI autorizado poné
-   `https://TU-URL-DE-CLOUD-RUN/api/admin/drive/oauth2callback`.
+   `https://TU-SERVICIO.onrender.com/api/admin/drive/oauth2callback`.
 4. En las variables de entorno del servicio (ver `DEPLOY.md`):
    ```
    DRIVE_ENABLED=true
    DRIVE_OAUTH_CLIENT_ID=el-client-id
    DRIVE_OAUTH_CLIENT_SECRET=el-client-secret
-   DRIVE_OAUTH_REDIRECT_URI=https://TU-URL-DE-CLOUD-RUN/api/admin/drive/oauth2callback
+   DRIVE_OAUTH_REDIRECT_URI=https://TU-SERVICIO.onrender.com/api/admin/drive/oauth2callback
    ```
 5. Entrá a `/admin.html` logueado como admin y hacé click en "☁️ Conectar
    Google Drive". Vas a ver un aviso de "app no verificada" — es esperable
@@ -149,9 +168,9 @@ No hace falta crear ni compartir ninguna carpeta a mano: la primera vez
 que se sube un CV, la app busca (o crea) una carpeta llamada
 "Job Finder - CVs recibidos" en tu Drive.
 
-Sin esto configurado, los CVs igual quedan disponibles en
-`backend/storage/sessions/{session_id}/cv_original.*` — Drive es un extra,
-no un requisito para que el sistema funcione.
+Sin esto configurado, los CVs igual quedan disponibles en el bucket de
+Supabase Storage — Drive es un extra (una copia de conveniencia para el
+admin), no un requisito para que el sistema funcione.
 
 ## Estructura
 
@@ -162,24 +181,20 @@ job-finder/
 │   ├── requirements.txt
 │   ├── .env.example
 │   ├── services/
-│   │   ├── sessions.py        # estado de cada solicitud (filesystem, sin DB)
-│   │   ├── auth.py            # verifica JWT de Supabase, detecta admin
-│   │   ├── notifications.py   # email real o log local
-│   │   └── storage_drive.py   # Google Drive real o fallback local
-│   ├── schemas/
-│   │   ├── cv_analysis_ejemplo.json
-│   │   ├── prompt_para_claude_cv_analysis.md
-│   │   ├── vacantes_ejemplo.json
-│   │   ├── vacantes_demo.json           # ejemplo con 10 vacantes para probar rápido
-│   │   └── prompt_para_claude_vacantes.md
-│   └── storage/                # se genera en runtime (CVs, jsons, log)
-│       ├── notifications.log
-│       └── sessions/{session_id}/
-│           ├── request.json         # incluye user_id/user_email del dueño
-│           ├── cv_original.*
-│           ├── cv_optimizado.docx   # lo subís vos desde el panel
-│           ├── cv_scores.json       # lo subís vos desde el panel (cv_analysis.json)
-│           └── vacantes.json        # lo subís vos desde el panel
+│   │   ├── db.py               # cliente de Supabase (Postgres + Storage)
+│   │   ├── sessions.py         # estado de cada solicitud (tabla `sessions`)
+│   │   ├── auth.py             # verifica JWT de Supabase, detecta admin
+│   │   ├── notifications.py    # email real + tabla `notifications`
+│   │   ├── storage_drive.py    # Google Drive real o fallback sin Drive
+│   │   └── drive_oauth.py      # flujo OAuth de conexión con Drive
+│   ├── supabase/
+│   │   └── schema.sql          # correr una vez en el SQL Editor del proyecto
+│   └── schemas/
+│       ├── cv_analysis_ejemplo.json
+│       ├── prompt_para_claude_cv_analysis.md
+│       ├── vacantes_ejemplo.json
+│       ├── vacantes_demo.json           # ejemplo con 10 vacantes para probar rápido
+│       └── prompt_para_claude_vacantes.md
 └── frontend/                   # HTML/CSS/JS plano, sin build step
     ├── auth.js / auth.css               — cliente Supabase compartido, guards de sesión
     ├── login.html / login.js            — signup + login de usuarios normales
@@ -192,19 +207,22 @@ job-finder/
 
 ## Por qué estas decisiones
 
-- **Sin base de datos propia:** cada sesión es una carpeta con un
-  `request.json`. Alcanza y sobra para un MVP manual, y te deja
-  inspeccionar/editar archivos a mano si hace falta. Los *usuarios* sí viven
-  en una base de datos real — la de Supabase Auth — no hicimos falta
-  reinventar eso.
+- **Todo en Supabase (Postgres + Storage), sin filesystem propio:** cada
+  sesión es una fila en la tabla `sessions`, los CVs van a un bucket de
+  Storage. Antes era un filesystem local (una carpeta por sesión), pero el
+  servicio se despliega en Render sin disco persistente — cualquier archivo
+  local se pierde en cada redeploy. RLS queda deshabilitado a propósito: el
+  frontend nunca toca estas tablas directo, toda la autorización la hace el
+  backend en Python (`auth.py`).
 - **Sin build step en el frontend:** HTML/CSS/JS plano servido directo por
   FastAPI. Menos piezas que puedan romperse mientras validás el modelo de
   negocio. Supabase se carga por CDN (`@supabase/supabase-js`), sin npm.
-- **JWT verificado localmente, sin SDK de Supabase en el backend:** el
-  frontend usa `supabase-js` para login/signup y consigue un JWT. El backend
-  solo necesita el JWT Secret del proyecto para verificar que ese token es
-  válido (librería `PyJWT`) — no hace falta instalar el SDK completo de
-  Supabase en Python para esto.
+- **JWT verificado localmente para auth, SDK de Supabase solo para datos:**
+  el frontend usa `supabase-js` para login/signup y consigue un JWT. El
+  backend verifica ese token contra las JWKS del proyecto (librería `PyJWT`,
+  ver `auth.py`) sin necesitar el SDK completo para eso — pero sí usa el SDK
+  de Python (`supabase`, ver `services/db.py`) para leer/escribir en
+  Postgres y Storage con la `service_role` key.
 - **El admin es un email, no un rol especial en la base de datos:** con un
   MVP de una sola persona administrando, alcanza con comparar el email del
   token contra `ADMIN_EMAIL`. Si en el futuro hay más de un admin, ahí sí

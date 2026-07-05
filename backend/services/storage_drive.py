@@ -21,7 +21,8 @@ normal (15GB gratis).
   4. En las variables de entorno del servicio: DRIVE_OAUTH_CLIENT_ID,
      DRIVE_OAUTH_CLIENT_SECRET, DRIVE_OAUTH_REDIRECT_URI, DRIVE_ENABLED=true.
   5. Entrar a /admin.html logueado como admin y hacer click en
-     "Conectar Google Drive" -- eso arma backend/storage/drive_token.json.
+     "Conectar Google Drive" -- eso guarda el token en la tabla
+     app_settings de Supabase (ver drive_oauth.py).
 
 La carpeta de destino se busca/crea automáticamente la primera vez que se
 sube un CV (no hace falta crearla ni compartirla a mano): el scope
@@ -29,13 +30,16 @@ drive.file solo da acceso a archivos que esta app creó o abrió, por eso no
 sirve compartir una carpeta ya existente como en el flujo viejo de service
 account.
 
-Modo simulado (default): el CV se guarda únicamente en
-backend/storage/sessions/{session_id}/cv_original.* -- que ya es una
-carpeta local persistente. La app funciona igual, pero sin subir nada
-a Drive hasta que actives el modo real.
+Modo simulado (default): el CV se guarda únicamente en Supabase Storage
+(ver services/db.py). La app funciona igual, pero sin subir nada a Drive
+hasta que actives el modo real -- Drive acá es solo una copia extra de
+conveniencia para el admin, no el almacenamiento principal.
 """
+import io
+import json
 import os
-from pathlib import Path
+
+from services import db
 
 DRIVE_FOLDER_NAME = "Job Finder - CVs recibidos"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
@@ -47,24 +51,18 @@ def _get_credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
-    token_path = os.getenv("DRIVE_TOKEN_PATH", "backend/storage/drive_token.json")
-    if not Path(token_path).exists():
+    token_data = db.get_setting("drive_token")
+    if not token_data:
         raise RuntimeError(
-            f"No hay token de Drive todavía ({token_path}). "
-            "Entrá a /admin.html y hacé click en 'Conectar Google Drive'."
+            "No hay token de Drive todavía. Entrá a /admin.html y hacé click "
+            "en 'Conectar Google Drive'."
         )
 
-    creds = Credentials.from_authorized_user_file(token_path, scopes=SCOPES)
+    creds = Credentials.from_authorized_user_info(token_data, scopes=SCOPES)
 
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        try:
-            Path(token_path).write_text(creds.to_json(), encoding="utf-8")
-        except OSError:
-            # El refresh token no cambia entre llamadas, así que si por algún
-            # motivo no se puede persistir el access token renovado no es
-            # grave: se vuelve a refrescar en la próxima subida.
-            pass
+        db.set_setting("drive_token", json.loads(creds.to_json()))
 
     return creds
 
@@ -95,7 +93,7 @@ def _get_or_create_folder_id(service, folder_id_env: str) -> str | None:
     return _folder_id_cache
 
 
-def upload_cv_to_drive(local_path: Path, session_id: str, filename: str) -> str | None:
+def upload_cv_to_drive(content: bytes, session_id: str, filename: str) -> str | None:
     """Devuelve el link de Drive si se subió, o None si está en modo simulado
     o si falla la subida (nunca debe romper el flujo principal)."""
     enabled = os.getenv("DRIVE_ENABLED", "false").lower() == "true"
@@ -104,7 +102,7 @@ def upload_cv_to_drive(local_path: Path, session_id: str, filename: str) -> str 
 
     try:
         from googleapiclient.discovery import build
-        from googleapiclient.http import MediaFileUpload
+        from googleapiclient.http import MediaIoBaseUpload
 
         folder_id_env = os.getenv("DRIVE_FOLDER_ID", "")
 
@@ -114,7 +112,7 @@ def upload_cv_to_drive(local_path: Path, session_id: str, filename: str) -> str 
         folder_id = _get_or_create_folder_id(service, folder_id_env)
 
         file_metadata = {"name": f"{session_id}_{filename}", "parents": [folder_id] if folder_id else []}
-        media = MediaFileUpload(str(local_path), resumable=False)
+        media = MediaIoBaseUpload(io.BytesIO(content), mimetype="application/octet-stream", resumable=False)
         created = service.files().create(
             body=file_metadata, media_body=media, fields="id, webViewLink"
         ).execute()
@@ -126,5 +124,5 @@ def upload_cv_to_drive(local_path: Path, session_id: str, filename: str) -> str 
 
         return created.get("webViewLink")
     except Exception as e:  # noqa: BLE001
-        print(f"[storage_drive] Fallback a almacenamiento local. Motivo: {e}")
+        print(f"[storage_drive] Fallback sin Drive. Motivo: {e}")
         return None

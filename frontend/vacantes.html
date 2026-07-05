@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Vacantes</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/vacantes.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="user-bar" id="user-bar"></div>
+
+<div id="pending-view" class="card loading-panel" style="display:none; max-width:640px; margin:60px auto;">
+  <div class="spinner"></div>
+  <div class="msg">Estamos buscando vacantes para tu perfil</div>
+  <div class="sub">Puede tomar hasta 24 horas. Esta página se actualiza sola cada 10 segundos.</div>
+</div>
+
+<div id="error-view" class="card" style="display:none; max-width:640px; margin:60px auto;">
+  <h2>No encontramos esta sesión</h2>
+  <a class="btn" href="/index.html" style="display:inline-block;">Subir un CV</a>
+</div>
+
+<div id="platform" style="display:none;">
+
+  <header class="vh-header">
+    <div class="vh-header-inner">
+      <div class="vh-title">
+        <div class="vh-logo">💼 Vacantes para <span id="vh-candidate-name">—</span></div>
+        <div class="vh-badges" id="vh-stats-badges"></div>
+      </div>
+      <a class="btn secondary" href="#" id="vh-resultado-link" style="background:white;">← Ver mi análisis de CV</a>
+    </div>
+  </header>
+
+  <div class="vh-layout">
+    <aside class="vh-sidebar">
+      <nav id="vh-nav"></nav>
+    </aside>
+
+    <main class="vh-main">
+
+      <section class="vh-stats-grid" id="vh-stats-grid"></section>
+
+      <section class="vh-filters" id="vh-filters">
+        <button class="filter-btn active" data-filter="all">Todas</button>
+        <button class="filter-btn" data-filter-modalidad="Remoto">Remoto</button>
+        <button class="filter-btn" data-filter-modalidad="Híbrido">Híbrido</button>
+        <button class="filter-btn" data-filter-modalidad="Presencial">Presencial</button>
+        <button class="filter-btn" data-filter-nuevo="true">Nuevas (24h) ⚡</button>
+        <button class="filter-btn" data-filter-sencilla="true">Solicitud sencilla</button>
+      </section>
+
+      <section id="vh-top5-section">
+        <h2>🏆 Top 5 oportunidades</h2>
+        <table class="vh-top5-table" id="vh-top5-table">
+          <thead>
+            <tr><th>Puesto</th><th>Empresa</th><th>Modalidad</th><th>Match</th><th></th></tr>
+          </thead>
+          <tbody id="vh-top5-body"></tbody>
+        </table>
+      </section>
+
+      <section id="vh-sections"></section>
+
+      <section class="vh-notes" id="vh-notes-section" style="display:none;">
+        <h2>📌 Estrategia de postulación sugerida</h2>
+        <p id="vh-notes-text"></p>
+      </section>
+
+    </main>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/vacantes.js"></script>
+</body>
+</html>

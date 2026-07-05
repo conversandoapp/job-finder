@@ -1,0 +1,200 @@
+# Job Finder — MVP manual
+
+MVP del flujo de "optimizar CV + encontrar vacantes", pero **manual**: no hay
+agentes de IA corriendo automáticamente en el servidor. El sistema solo
+recibe solicitudes, te avisa a vos (el admin) y te da un panel para subir
+los resultados a mano. El usuario final nunca recibe un aviso — vuelve a
+entrar a su link cuando quiere consultar si ya está listo.
+
+## Flujo
+
+0. El usuario se crea una cuenta él mismo en `/login.html` (email + contraseña,
+   vía Supabase). Vos entrás a `/admin-login.html` con tu única cuenta admin.
+1. Usuario entra a `/` (`index.html`), sube su CV → ve "estamos procesando,
+   hasta 24h" y un link para volver más tarde.
+2. Vos recibís un aviso (panel admin + email si lo activás) con el CV.
+3. Entrás a `/admin.html`, le pegás el CV a Claude con el prompt de
+   `backend/schemas/prompt_para_claude_cv_analysis.md` y te devuelve un
+   `cv_analysis.json` (scores ATS, roles, keywords, debilidades) + el texto
+   del CV reescrito para pegar en Word. Subís el `.docx` que armaste + ese
+   JSON desde el panel — nada de campos sueltos para llenar a mano.
+4. Usuario vuelve a su link (`/resultado.html?session=...`) y ve su análisis
+   + descarga el CV optimizado. También ve un listado de "tus solicitudes
+   anteriores" en `/index.html` por si perdió el link.
+5. Usuario aprieta "Buscar vacantes" → te avisa de nuevo.
+6. Armás el `vacantes.json` con ayuda de Claude (ver
+   `backend/schemas/prompt_para_claude_vacantes.md`) y lo subís desde el panel.
+7. Usuario vuelve a `/vacantes.html?session=...` y ve la plataforma de
+   vacantes ya armada — filtros, cards, top 5, todo generado automáticamente
+   a partir de ese JSON (vos nunca escribís HTML).
+
+Cada sesión queda asociada al `user_id` de Supabase del usuario que subió el
+CV. El backend verifica en cada request que quien pide un resultado sea el
+dueño de esa sesión (o vos, el admin) — nadie puede ver el análisis de otra
+persona solo adivinando el link.
+
+## Configurar Supabase (obligatorio, una sola vez)
+
+**Nota sobre las claves:** Supabase cambió su forma de firmar los tokens.
+Los proyectos creados desde octubre de 2025 firman los JWT con un esquema
+asimétrico (ES256) en vez del secreto compartido de antes. El backend ya
+soporta ambos casos automáticamente, pero por eso **no vas a encontrar un
+"JWT Secret" en un proyecto nuevo** en el lugar donde antes estaba — es
+normal, no hace falta.
+
+1. Creá un proyecto gratis en https://supabase.com/dashboard.
+2. Andá a **Authentication → Sign In / Providers → Email** y por ahora dejá
+   "Confirm email" DESACTIVADO — así podés probar signup/login local sin
+   tener que configurar el envío de emails de confirmación. Podés activarlo
+   después cuando vayas a producción.
+3. Andá a **Project Settings → API Keys** y copiá:
+   - **Project URL** → `SUPABASE_URL`
+   - **anon public** (o **publishable key**, `sb_publishable_...`, en
+     proyectos nuevos) → `SUPABASE_ANON_KEY`
+4. Pegá esos dos valores en `backend/.env` (ver `.env.example`). Dejá
+   `SUPABASE_JWT_SECRET` vacío — el backend verifica los tokens
+   automáticamente contra las claves públicas del proyecto
+   (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`), no hace falta copiar
+   nada más.
+   - Excepción: si tu proyecto es viejo y todavía firma con HS256 (lo ves en
+     **Project Settings → JWT Keys → pestaña "Legacy JWT Secret"**, si existe
+     esa opción), copiá ese secreto en `SUPABASE_JWT_SECRET` como respaldo.
+5. Creá tu cuenta admin: abrí `http://localhost:8000/login.html` (la de
+   usuarios normales) y registrate una vez con el email que vayas a usar
+   como admin. Después poné ese mismo email en `ADMIN_EMAIL` en `backend/.env`.
+   A partir de ahí, ese email entra como admin en `/admin-login.html` y
+   como usuario normal en `/login.html` (son el mismo login de Supabase,
+   lo único que cambia es qué endpoints del backend le dejamos usar).
+
+Sin `SUPABASE_URL` / `SUPABASE_ANON_KEY` configurados, el login no
+funciona — es la única parte no-opcional de la configuración. **La pantalla
+de "Connect to your project" con "Direct connection / Transaction pooler"
+es para conectarte directo a la base de datos Postgres (SQL, ORMs) — no es
+lo que necesitamos acá, ignorala.**
+
+## Cómo correrlo local
+
+```bash
+cd job-finder/backend
+python -m venv venv
+venv\Scripts\activate            # en Mac/Linux: source venv/bin/activate
+pip install -r requirements.txt
+copy .env.example .env           # en Mac/Linux: cp .env.example .env
+```
+
+Editá `backend/.env` y completá `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_JWT_SECRET` y `ADMIN_EMAIL` (ver sección de arriba). Después:
+
+```bash
+uvicorn app:app --reload --port 8000
+```
+
+Abrí `http://localhost:8000/index.html` — esa es la vista del usuario
+(pide login/registro). Abrí `http://localhost:8000/admin-login.html` para
+entrar a tu panel.
+
+Sin tocar nada más, las notificaciones quedan en
+`backend/storage/notifications.log` (y visibles en la pestaña
+"Notificaciones" del panel admin), y los CVs se guardan en
+`backend/storage/sessions/{session_id}/`.
+
+## Activar email real (opcional)
+
+1. Activá verificación en 2 pasos en tu cuenta de Gmail (conversandoapp@gmail.com).
+2. Andá a https://myaccount.google.com/apppasswords y generá una App Password para "Mail".
+3. En `backend/.env`:
+   ```
+   NOTIFY_EMAIL_ENABLED=true
+   NOTIFY_EMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+   ```
+4. Reiniciá el servidor. A partir de ahí, cada CV subido o vacante pedida te
+   manda un correo real además de quedar en el panel.
+
+Es gratis (Gmail no cobra por esto) y no requiere ningún servicio externo.
+
+## Activar Google Drive real (opcional)
+
+1. Andá a https://console.cloud.google.com/, creá un proyecto y habilitá
+   "Google Drive API".
+2. Credenciales → "Service Account" → creale una clave JSON.
+3. Guardá ese archivo como `backend/credentials/service_account.json`.
+4. En Google Drive, creá una carpeta (ej. "Job Finder — CVs recibidos"),
+   compartila con el email de la cuenta de servicio (termina en
+   `...iam.gserviceaccount.com`) dándole permiso de Editor.
+5. Copiá el ID de esa carpeta (está en la URL de Drive) y en `backend/.env`:
+   ```
+   DRIVE_ENABLED=true
+   DRIVE_FOLDER_ID=el-id-de-la-carpeta
+   ```
+6. Instalá las dependencias de Google (ya están en `requirements.txt`).
+
+Sin esto configurado, los CVs igual quedan disponibles en
+`backend/storage/sessions/{session_id}/cv_original.*` — Drive es un extra,
+no un requisito para que el sistema funcione.
+
+## Estructura
+
+```
+job-finder/
+├── backend/
+│   ├── app.py                 # FastAPI: todos los endpoints + sirve el frontend
+│   ├── requirements.txt
+│   ├── .env.example
+│   ├── services/
+│   │   ├── sessions.py        # estado de cada solicitud (filesystem, sin DB)
+│   │   ├── auth.py            # verifica JWT de Supabase, detecta admin
+│   │   ├── notifications.py   # email real o log local
+│   │   └── storage_drive.py   # Google Drive real o fallback local
+│   ├── schemas/
+│   │   ├── cv_analysis_ejemplo.json
+│   │   ├── prompt_para_claude_cv_analysis.md
+│   │   ├── vacantes_ejemplo.json
+│   │   ├── vacantes_demo.json           # ejemplo con 10 vacantes para probar rápido
+│   │   └── prompt_para_claude_vacantes.md
+│   └── storage/                # se genera en runtime (CVs, jsons, log)
+│       ├── notifications.log
+│       └── sessions/{session_id}/
+│           ├── request.json         # incluye user_id/user_email del dueño
+│           ├── cv_original.*
+│           ├── cv_optimizado.docx   # lo subís vos desde el panel
+│           ├── cv_scores.json       # lo subís vos desde el panel (cv_analysis.json)
+│           └── vacantes.json        # lo subís vos desde el panel
+└── frontend/                   # HTML/CSS/JS plano, sin build step
+    ├── auth.js / auth.css               — cliente Supabase compartido, guards de sesión
+    ├── login.html / login.js            — signup + login de usuarios normales
+    ├── admin-login.html / admin-login.js — login exclusivo de la cuenta admin
+    ├── index.html / app.js              — subir CV + ver solicitudes anteriores
+    ├── resultado.html / resultado.js    — ver análisis + pedir vacantes
+    ├── vacantes.html / vacantes.js      — plataforma de vacantes (data-driven)
+    └── admin.html / admin.js            — panel admin
+```
+
+## Por qué estas decisiones
+
+- **Sin base de datos propia:** cada sesión es una carpeta con un
+  `request.json`. Alcanza y sobra para un MVP manual, y te deja
+  inspeccionar/editar archivos a mano si hace falta. Los *usuarios* sí viven
+  en una base de datos real — la de Supabase Auth — no hicimos falta
+  reinventar eso.
+- **Sin build step en el frontend:** HTML/CSS/JS plano servido directo por
+  FastAPI. Menos piezas que puedan romperse mientras validás el modelo de
+  negocio. Supabase se carga por CDN (`@supabase/supabase-js`), sin npm.
+- **JWT verificado localmente, sin SDK de Supabase en el backend:** el
+  frontend usa `supabase-js` para login/signup y consigue un JWT. El backend
+  solo necesita el JWT Secret del proyecto para verificar que ese token es
+  válido (librería `PyJWT`) — no hace falta instalar el SDK completo de
+  Supabase en Python para esto.
+- **El admin es un email, no un rol especial en la base de datos:** con un
+  MVP de una sola persona administrando, alcanza con comparar el email del
+  token contra `ADMIN_EMAIL`. Si en el futuro hay más de un admin, ahí sí
+  conviene migrar a una tabla de roles en Supabase.
+- **JSON en vez de HTML para las vacantes (y ahora también para el análisis
+  de CV):** vos seguís usando Claude para todo el trabajo de análisis y
+  redacción, pero el output es datos estructurados. Las páginas ya tienen el
+  diseño, los filtros y el layout hechos — solo les das de comer el JSON.
+  Esto es más rápido y más consistente que pedirle HTML completo a Claude
+  cada vez, y evita que un output raro de Claude rompa el diseño.
+- **Sin notificación push al usuario:** tal como se definió, el usuario debe
+  volver a consultar su link (o la lista de "solicitudes anteriores" en
+  `index.html`, ahora que tiene cuenta). La página hace polling automático
+  cada 10s mientras está abierta, pero no hay ningún aviso si la cierra.

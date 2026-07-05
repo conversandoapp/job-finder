@@ -1,0 +1,44 @@
+{
+  "session_id": "reemplazar-con-tu-session-id",
+  "ats_score_original": 44,
+  "ats_score_optimizado": 68,
+  "resumen": "Product Manager con 8 años de experiencia liderando squads ágiles y roadmap de producto en e-commerce y fintech. Buen dominio de Scrum, SQL y analítica de producto; el CV original no comunicaba resultados cuantificables ni una sección clara de skills.",
+  "roles_objetivo": [
+    {
+      "titulo": "Product Manager",
+      "justificacion": "Match directo con experiencia gestionando roadmap y squads de producto.",
+      "match_porcentaje": 88
+    },
+    {
+      "titulo": "Product Owner Senior",
+      "justificacion": "Certificación PO activa y experiencia gestionando backlog con equipos Scrum.",
+      "match_porcentaje": 79
+    },
+    {
+      "titulo": "UX Product Manager",
+      "justificacion": "Experiencia combinada en discovery de usuario y métricas de producto.",
+      "match_porcentaje": 71
+    },
+    {
+      "titulo": "Agile Project Manager",
+      "justificacion": "Rol híbrido frecuente en startups LATAM remoto.",
+      "match_porcentaje": 65
+    }
+  ],
+  "keywords_agregados": [
+    "Product Discovery",
+    "Go-to-Market",
+    "KPIs de producto",
+    "Sprint Planning",
+    "Backlog Grooming",
+    "Data-Driven",
+    "Cross-functional teams",
+    "Customer Journey"
+  ],
+  "debilidades": [
+    "Sin sección explícita de habilidades técnicas y blandas",
+    "Bullets con verbos débiles (\"Encargado de...\" en vez de verbos de acción)",
+    "No hay métricas ni resultados cuantificables en los logros",
+    "Formato de fechas inconsistente entre experiencias"
+  ]
+}

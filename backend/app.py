@@ -1,0 +1,286 @@
+"""
+Job Finder MVP — backend manual.
+
+No hay agentes automáticos de IA corriendo en el servidor. El flujo es:
+
+  1. Usuario sube su CV -> se guarda localmente (+ Google Drive si está
+     configurado) -> se notifica al admin (conversandoapp@gmail.com) ->
+     usuario ve "estamos procesando, puede tardar hasta 24h".
+  2. Admin (vos) entra a /admin.html, ve la solicitud, optimiza el CV a
+     mano (podés usar Claude para redactarlo) y sube el .docx resultante
+     + un puntaje ATS simple desde el panel.
+  3. Usuario vuelve a entrar a /resultado.html?session=... y si ya está
+     listo, ve el resultado y puede pedir "buscar vacantes".
+  4. Ese click también notifica al admin. El admin arma un JSON de
+     vacantes (con ayuda de Claude, ver backend/schemas/prompt_para_claude_vacantes.md)
+     y lo sube desde el panel.
+  5. Usuario vuelve a /vacantes.html?session=... y ve la plataforma de
+     vacantes ya armada a partir de ese JSON.
+
+No hay push notifications hacia el usuario: el usuario debe volver a
+consultar la página periódicamente (tal como se definió para este MVP).
+"""
+import json
+import os
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from services import auth, notifications, sessions, storage_drive
+
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
+
+app = FastAPI(title="Job Finder MVP (manual)")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+ALLOWED_CV_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+
+
+# ---------------------------------------------------------------------------
+# Config / sesión de auth
+# ---------------------------------------------------------------------------
+
+@app.get("/api/config")
+async def config():
+    """Datos públicos (no secretos) que el frontend necesita para iniciar el
+    cliente de Supabase. La anon key está diseñada para exponerse en el
+    frontend — la seguridad real la da el JWT Secret que solo tiene el backend."""
+    return {
+        "supabase_url": os.getenv("SUPABASE_URL", ""),
+        "supabase_anon_key": os.getenv("SUPABASE_ANON_KEY", ""),
+    }
+
+
+@app.get("/api/whoami")
+async def whoami(user: dict = Depends(auth.get_current_user)):
+    return {"id": user["id"], "email": user["email"], "is_admin": auth.is_admin(user)}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de usuario (requieren estar logueado)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/analyze")
+async def analyze(
+    file: UploadFile = File(...),
+    linkedin_url: str = Form(None),
+    pais: str = Form("Peru"),
+    user: dict = Depends(auth.get_current_user),
+):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_CV_EXTENSIONS:
+        raise HTTPException(400, f"Formato no soportado ({ext}). Usa PDF, DOCX o TXT.")
+
+    candidate_name = Path(file.filename or "cv").stem
+    session_id = sessions.create_session(
+        candidate_name, linkedin_url, pais, user_id=user["id"], user_email=user["email"]
+    )
+
+    session_folder = sessions.session_dir(session_id)
+    local_path = session_folder / f"cv_original{ext}"
+    with open(local_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    drive_link = storage_drive.upload_cv_to_drive(local_path, session_id, file.filename or "cv")
+    if drive_link:
+        sessions.update_session(session_id, cv_drive_link=drive_link)
+
+    notifications.notify_cv_uploaded(session_id, candidate_name, pais, linkedin_url, drive_link)
+
+    return {"session_id": session_id, "status": "processing"}
+
+
+@app.get("/api/my-sessions")
+async def my_sessions(user: dict = Depends(auth.get_current_user)):
+    return sessions.list_sessions_for_user(user["id"])
+
+
+@app.get("/api/status/{session_id}")
+async def status(session_id: str, user: dict = Depends(auth.get_current_user)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    auth.ensure_owner_or_admin(data, user)
+    return data
+
+
+@app.get("/api/result/{session_id}")
+async def result(session_id: str, user: dict = Depends(auth.get_current_user)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    auth.ensure_owner_or_admin(data, user)
+    if data["cv_status"] != "ready":
+        return JSONResponse({"cv_status": data["cv_status"]}, status_code=202)
+
+    scores_path = sessions.session_dir(session_id) / "cv_scores.json"
+    scores = {}
+    if scores_path.exists():
+        scores = json.loads(scores_path.read_text(encoding="utf-8"))
+
+    return {"cv_status": "ready", "session": data, "scores": scores}
+
+
+@app.get("/api/download/cv/{session_id}")
+async def download_cv(session_id: str, user: dict = Depends(auth.get_current_user)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    auth.ensure_owner_or_admin(data, user)
+
+    folder = sessions.session_dir(session_id)
+    for candidate in folder.glob("cv_optimizado.*"):
+        return FileResponse(candidate, filename=candidate.name)
+    raise HTTPException(404, "El CV optimizado todavía no está listo")
+
+
+@app.post("/api/jobs")
+async def request_jobs(payload: dict, user: dict = Depends(auth.get_current_user)):
+    session_id = payload.get("session_id")
+    if not session_id:
+        raise HTTPException(400, "Falta session_id")
+
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    auth.ensure_owner_or_admin(data, user)
+    if data["cv_status"] != "ready":
+        raise HTTPException(400, "El CV todavía no está listo")
+
+    sessions.update_session(
+        session_id,
+        jobs_status="pending",
+        jobs_requested_at=datetime.now(timezone.utc).isoformat(),
+    )
+    notifications.notify_jobs_requested(session_id, data.get("candidate_name"), data.get("pais"))
+    return {"status": "processing"}
+
+
+@app.get("/api/vacantes/{session_id}")
+async def vacantes(session_id: str, user: dict = Depends(auth.get_current_user)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    auth.ensure_owner_or_admin(data, user)
+    if data["jobs_status"] != "ready":
+        return JSONResponse({"jobs_status": data["jobs_status"]}, status_code=202)
+
+    vac_path = sessions.session_dir(session_id) / "vacantes.json"
+    if not vac_path.exists():
+        return JSONResponse({"jobs_status": "pending"}, status_code=202)
+
+    return json.loads(vac_path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de admin (panel local /admin.html) — requieren la cuenta admin
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/requests")
+async def admin_requests(user: dict = Depends(auth.require_admin)):
+    return sessions.list_sessions()
+
+
+@app.get("/api/admin/notifications")
+async def admin_notifications(user: dict = Depends(auth.require_admin)):
+    return notifications.read_notifications()
+
+
+@app.get("/api/admin/download/original/{session_id}")
+async def admin_download_original(session_id: str, user: dict = Depends(auth.require_admin)):
+    folder = sessions.session_dir(session_id)
+    for candidate in folder.glob("cv_original.*"):
+        return FileResponse(candidate, filename=candidate.name)
+    raise HTTPException(404, "No se encontró el CV original")
+
+
+@app.post("/api/admin/{session_id}/cv")
+async def admin_upload_cv(
+    session_id: str,
+    file: UploadFile = File(...),
+    scores_file: UploadFile = File(...),
+    user: dict = Depends(auth.require_admin),
+):
+    """Sube el CV optimizado (.docx/.pdf) + un único cv_analysis.json generado
+    con Claude (ver backend/schemas/prompt_para_claude_cv_analysis.md)."""
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    folder = sessions.session_dir(session_id)
+
+    ext = Path(file.filename or "cv.docx").suffix or ".docx"
+    dest = folder / f"cv_optimizado{ext}"
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    raw = await scores_file.read()
+    try:
+        scores = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"cv_analysis.json no es JSON válido: {e}")
+
+    required_keys = {"ats_score_original", "ats_score_optimizado", "roles_objetivo",
+                      "keywords_agregados", "debilidades"}
+    missing = required_keys - scores.keys()
+    if missing:
+        raise HTTPException(400, f"Al JSON le faltan estas claves: {', '.join(sorted(missing))}")
+
+    (folder / "cv_scores.json").write_text(
+        json.dumps(scores, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    sessions.update_session(
+        session_id, cv_status="ready", cv_ready_at=datetime.now(timezone.utc).isoformat()
+    )
+    return {"status": "ok"}
+
+
+@app.post("/api/admin/{session_id}/vacantes")
+async def admin_upload_vacantes(
+    session_id: str, file: UploadFile = File(...), user: dict = Depends(auth.require_admin)
+):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    raw = await file.read()
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"El archivo no es JSON válido: {e}")
+
+    if "vacantes" not in parsed:
+        raise HTTPException(400, "El JSON debe tener una clave 'vacantes' con la lista de ofertas.")
+
+    folder = sessions.session_dir(session_id)
+    (folder / "vacantes.json").write_text(
+        json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    sessions.update_session(
+        session_id, jobs_status="ready", jobs_ready_at=datetime.now(timezone.utc).isoformat()
+    )
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Frontend estático
+# ---------------------------------------------------------------------------
+
+app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

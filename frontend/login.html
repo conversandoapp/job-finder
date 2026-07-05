@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Ingresar</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="card auth-card">
+    <h1 style="text-align:center;">🧭 Job Finder</h1>
+    <p class="subtitle" style="text-align:center;">Optimiza tu CV y encuentra vacantes</p>
+
+    <div class="admin-tabs" style="justify-content:center;">
+      <button class="tab-btn active" data-tab="signin">Ingresar</button>
+      <button class="tab-btn" data-tab="signup">Crear cuenta</button>
+    </div>
+
+    <form id="signin-form" class="auth-form">
+      <label class="field-label">Email</label>
+      <input type="email" name="email" required />
+      <label class="field-label">Contraseña</label>
+      <input type="password" name="password" required />
+      <button type="submit" class="btn" style="width:100%;">Ingresar</button>
+      <div class="form-msg"></div>
+    </form>
+
+    <form id="signup-form" class="auth-form" style="display:none;">
+      <label class="field-label">Email</label>
+      <input type="email" name="email" required />
+      <label class="field-label">Contraseña (mínimo 6 caracteres)</label>
+      <input type="password" name="password" required minlength="6" />
+      <button type="submit" class="btn" style="width:100%;">Crear cuenta</button>
+      <div class="form-msg"></div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/login.js"></script>
+</body>
+</html>

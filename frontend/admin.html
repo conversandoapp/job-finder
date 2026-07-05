@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Panel Admin</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/admin.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="top-header">
+  <div class="brand">🛠️ Job Finder <span class="tag">panel admin (solo vos)</span></div>
+</div>
+<div class="user-bar" id="user-bar"></div>
+
+<div class="container" style="max-width: 1100px;">
+
+  <div class="admin-tabs">
+    <button class="tab-btn active" data-tab="requests">Solicitudes</button>
+    <button class="tab-btn" data-tab="notifications">Notificaciones</button>
+  </div>
+
+  <div id="tab-requests">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+        <div>
+          <h2>Solicitudes pendientes y completadas</h2>
+          <p class="subtitle" style="margin-bottom:0;">Cuando alguien sube un CV o pide vacantes te avisamos por acá (y por email si lo activaste). Subí el resultado desde cada tarjeta cuando lo tengas listo.</p>
+        </div>
+        <button type="button" class="btn secondary" id="refresh-btn" style="margin-top:0; white-space:nowrap;">🔄 Actualizar</button>
+      </div>
+    </div>
+    <div id="requests-list"></div>
+  </div>
+
+  <div id="tab-notifications" style="display:none;">
+    <div class="card">
+      <h2>Historial de avisos</h2>
+      <p class="subtitle">Todo lo que te hubiéramos avisado por email queda registrado acá también.</p>
+    </div>
+    <div id="notifications-list"></div>
+  </div>
+
+</div>
+
+<template id="request-card-template">
+  <div class="card request-card">
+    <div class="req-header">
+      <div>
+        <div class="req-name"></div>
+        <div class="req-meta"></div>
+      </div>
+      <div class="req-status-pills"></div>
+    </div>
+
+    <div class="req-links"></div>
+
+    <div class="req-cv-form">
+      <h3>Subir CV optimizado</h3>
+      <p class="subtitle" style="margin-bottom:8px;">
+        Generá el análisis con Claude usando el prompt de
+        <code>backend/schemas/prompt_para_claude_cv_analysis.md</code> — te devuelve
+        el JSON con scores, roles, keywords y debilidades, y el texto del CV
+        reescrito para que lo pegues en Word.
+      </p>
+      <form class="cv-upload-form">
+        <label class="field-label">Archivo .docx/.pdf optimizado (el que armaste en Word)</label>
+        <input type="file" name="file" accept=".docx,.doc,.pdf" required />
+
+        <label class="field-label">cv_analysis.json (el que te devolvió Claude)</label>
+        <input type="file" name="scores_file" accept=".json" required />
+
+        <button type="submit" class="btn">Subir CV optimizado</button>
+        <div class="form-msg"></div>
+      </form>
+    </div>
+
+    <div class="req-vacantes-form">
+      <h3>Subir vacantes.json</h3>
+      <p class="subtitle" style="margin-bottom:8px;">
+        Generalo con Claude usando el prompt de
+        <code>backend/schemas/prompt_para_claude_vacantes.md</code> y subí el .json resultante.
+      </p>
+      <form class="vacantes-upload-form">
+        <input type="file" name="file" accept=".json" required />
+        <button type="submit" class="btn">Subir vacantes.json</button>
+        <div class="form-msg"></div>
+      </form>
+    </div>
+  </div>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Ingreso admin</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="card auth-card">
+    <h1 style="text-align:center;">🛠️ Panel Admin</h1>
+    <p class="subtitle" style="text-align:center;">Solo para la cuenta administradora de Job Finder</p>
+
+    <form id="signin-form" class="auth-form">
+      <label class="field-label">Email</label>
+      <input type="email" name="email" required />
+      <label class="field-label">Contraseña</label>
+      <input type="password" name="password" required />
+      <button type="submit" class="btn" style="width:100%;">Ingresar</button>
+      <div class="form-msg"></div>
+    </form>
+
+    <p class="subtitle" style="text-align:center; margin-top:18px;">
+      ¿Sos un usuario buscando trabajo? <a href="/login.html">Ingresá acá</a>
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/admin-login.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.auth-card { width: 100%; max-width: 400px; }
+.auth-form { margin-top: 18px; }
+
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  font-size: 13px;
+  padding: 10px 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.user-bar .user-email { color: var(--text-muted); }
+.user-bar .logout-btn {
+  background: none;
+  border: 1px solid var(--gray-border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.user-bar .logout-btn:hover { background: var(--gray-bg); }
+
+.my-sessions-list { margin-bottom: 20px; }
+.my-sessions-list .session-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gray-border);
+  font-size: 14px;
+}
+.my-sessions-list .session-row:last-child { border-bottom: none; }

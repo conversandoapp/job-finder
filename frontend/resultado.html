@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Resultado</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="top-header">
+  <div class="brand">🧭 Job Finder <span class="tag">resultado de tu análisis</span></div>
+</div>
+<div class="user-bar" id="user-bar"></div>
+
+<div class="container">
+
+  <div id="pending-view" class="card loading-panel" style="display:none;">
+    <div class="spinner"></div>
+    <div class="msg">Todavía estamos procesando tu CV</div>
+    <div class="sub">Puede tomar hasta 24 horas desde que lo subiste. Esta página se actualiza sola cada 10 segundos — también puedes cerrarla y volver más tarde con el mismo enlace.</div>
+  </div>
+
+  <div id="error-view" class="card" style="display:none;">
+    <h2>No encontramos esta sesión</h2>
+    <p class="subtitle">Revisa que el enlace sea el mismo que guardaste al subir tu CV.</p>
+    <a class="btn" href="/index.html" style="display:inline-block;">Subir un CV</a>
+  </div>
+
+  <div id="ready-view" style="display:none;">
+
+    <div class="card">
+      <h1 id="candidate-name">—</h1>
+      <p class="subtitle" id="candidate-meta">—</p>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <h2>Puntaje ATS</h2>
+        <div class="score-circles">
+          <div class="score-circle before">
+            <span id="score-before">–</span>
+            <span class="lbl">Antes</span>
+          </div>
+          <div class="score-circle after">
+            <span id="score-after">–</span>
+            <span class="lbl">Después</span>
+          </div>
+        </div>
+
+        <h2 style="margin-top:22px;">Keywords agregados</h2>
+        <div class="chip-list" id="keywords-list"></div>
+
+        <h2 style="margin-top:22px;">Debilidades detectadas</h2>
+        <ul class="plain" id="weaknesses-list"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Roles objetivo sugeridos</h2>
+        <div id="roles-list"></div>
+
+        <div class="download-banner">
+          <div style="font-weight:600; margin-bottom:10px;">Tu CV optimizado está listo</div>
+          <a class="btn" id="download-link" href="#" style="display:inline-block; margin-top:0;">Descargar CV optimizado</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card cta-final">
+      <h2>¿Buscamos vacantes para tu perfil?</h2>
+      <p class="subtitle">Analizaremos LinkedIn y armaremos una plataforma con las mejores oportunidades para ti.</p>
+      <button class="btn" id="jobs-btn">Buscar vacantes en LinkedIn para mi perfil →</button>
+    </div>
+
+    <div id="jobs-pending-view" class="card loading-panel" style="display:none;">
+      <div class="spinner"></div>
+      <div class="msg">Estamos buscando vacantes para tu perfil</div>
+      <div class="sub">Este proceso puede tomar hasta 24 horas. Puedes volver a esta misma página más tarde para ver el resultado.</div>
+    </div>
+
+    <div id="jobs-ready-view" class="card" style="display:none; text-align:center;">
+      <h2>¡Tus vacantes ya están listas!</h2>
+      <a class="btn" id="jobs-link" href="#" style="display:inline-block;">Ver mis vacantes →</a>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/resultado.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+{
+  "session_id": "reemplazar-con-el-session-id-real",
+  "candidato": {
+    "nombre": "Sofía Ramírez Herrera",
+    "cargo_objetivo": "Product Manager",
+    "pais": "Colombia"
+  },
+  "generado_el": "2026-07-02",
+  "stats": {
+    "total_vacantes": 24,
+    "publicadas_hoy": 4,
+    "remotas": 11,
+    "solicitud_sencilla": 9
+  },
+  "top5_ids": ["job_001", "job_004", "job_009", "job_012", "job_018"],
+  "notas_estrategia": "Postula primero a las vacantes marcadas como 'Alta relevancia': tu experiencia en Scrum y OKRs coincide directamente con lo que piden. Para las remotas LATAM, destaca tu inglés avanzado en el mensaje de postulación. Evita las vacantes con más de 200 solicitantes salvo que tengan 'solicitud sencilla' activada, ya que ahí la competencia es más pareja.",
+  "vacantes": [
+    {
+      "id": "job_001",
+      "titulo": "Product Manager",
+      "empresa": "Rappi",
+      "ubicacion": "Bogotá, Colombia",
+      "modalidad": "Híbrido",
+      "fecha_publicacion": "2026-07-01",
+      "es_nuevo_24h": true,
+      "num_solicitudes": 34,
+      "solicitud_sencilla": true,
+      "url": "https://www.linkedin.com/jobs/view/1234567890/",
+      "descripcion_corta": "Buscamos un PM con experiencia en gestión de roadmap y metodologías ágiles para liderar el squad de checkout.",
+      "categoria": "alta_relevancia",
+      "match_porcentaje": 88
+    },
+    {
+      "id": "job_002",
+      "titulo": "Product Owner Senior",
+      "empresa": "Globant",
+      "ubicacion": "Remoto, LATAM",
+      "modalidad": "Remoto",
+      "fecha_publicacion": "2026-06-30",
+      "es_nuevo_24h": false,
+      "num_solicitudes": 58,
+      "solicitud_sencilla": false,
+      "url": "https://www.linkedin.com/jobs/view/1234567891/",
+      "descripcion_corta": "Rol 100% remoto para gestionar backlog de un producto fintech con equipos distribuidos en 4 países.",
+      "categoria": "remoto_latam",
+      "match_porcentaje": 79
+    }
+  ]
+}

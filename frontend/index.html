@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Job Finder — Optimiza tu CV</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/auth.css" />
+</head>
+<body>
+
+<div class="top-header">
+  <div class="brand">🧭 Job Finder <span class="tag">optimiza tu CV y encuentra vacantes</span></div>
+</div>
+<div class="user-bar" id="user-bar"></div>
+
+<div class="container">
+
+  <div id="my-sessions-card" class="card" style="display:none;">
+    <h2>Tus solicitudes anteriores</h2>
+    <div class="my-sessions-list" id="my-sessions-list"></div>
+  </div>
+
+  <div id="form-view" class="card">
+    <h1>Optimiza tu CV</h1>
+    <p class="subtitle">Sube tu CV y te avisaremos apenas tengamos tu análisis y tu versión optimizada lista.</p>
+
+    <form id="upload-form">
+      <div id="dropzone" class="dropzone">
+        <div class="icon">📄</div>
+        <div>Arrastra tu CV aquí o haz click para elegir un archivo</div>
+        <div class="filename" id="filename-label"></div>
+        <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt" hidden />
+      </div>
+
+      <label class="field-label" for="linkedin_url">LinkedIn (opcional)</label>
+      <input type="url" id="linkedin_url" placeholder="https://www.linkedin.com/in/tu-perfil" />
+
+      <label class="field-label" for="pais">País</label>
+      <select id="pais">
+        <option>Peru</option>
+        <option>Colombia</option>
+        <option>Mexico</option>
+        <option>Chile</option>
+        <option>Argentina</option>
+        <option>Otro</option>
+      </select>
+
+      <button type="submit" class="btn" id="submit-btn">Analizar CV</button>
+      <div id="error-box" class="error-box" style="display:none;"></div>
+    </form>
+  </div>
+
+  <div id="loading-view" class="card loading-panel" style="display:none;">
+    <div class="spinner"></div>
+    <div class="msg">Estamos procesando tu CV</div>
+    <div class="sub">Este proceso puede tomar hasta 24 horas. Puedes cerrar esta página y volver más tarde con el mismo enlace — te lo dejamos guardado abajo.</div>
+    <div class="sub" style="margin-top:18px;">
+      Guarda este enlace para consultar el resultado:<br/>
+      <a id="result-link" href="#"></a>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/auth.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

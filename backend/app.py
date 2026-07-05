@@ -3,7 +3,7 @@ Job Finder MVP — backend manual.
 
 No hay agentes automáticos de IA corriendo en el servidor. El flujo es:
 
-  1. Usuario sube su CV -> se guarda localmente (+ Google Drive si está
+  1. Usuario sube su CV -> se guarda en Supabase (+ Google Drive si está
      configurado) -> se notifica al admin (conversandoapp@gmail.com) ->
      usuario ve "estamos procesando, puede tardar hasta 24h".
   2. Admin (vos) entra a /admin.html, ve la solicitud, optimiza el CV a
@@ -22,17 +22,16 @@ consultar la página periódicamente (tal como se definió para este MVP).
 """
 import json
 import os
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from services import auth, notifications, sessions, storage_drive
+from services import auth, db, drive_oauth, notifications, sessions, storage_drive
 
 load_dotenv()
 
@@ -91,12 +90,12 @@ async def analyze(
         candidate_name, linkedin_url, pais, user_id=user["id"], user_email=user["email"]
     )
 
-    session_folder = sessions.session_dir(session_id)
-    local_path = session_folder / f"cv_original{ext}"
-    with open(local_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    content = await file.read()
+    original_path = f"{session_id}/cv_original{ext}"
+    db.upload_file(original_path, content, file.content_type or "application/octet-stream")
+    sessions.update_session(session_id, cv_original_path=original_path)
 
-    drive_link = storage_drive.upload_cv_to_drive(local_path, session_id, file.filename or "cv")
+    drive_link = storage_drive.upload_cv_to_drive(content, session_id, file.filename or "cv")
     if drive_link:
         sessions.update_session(session_id, cv_drive_link=drive_link)
 
@@ -128,10 +127,7 @@ async def result(session_id: str, user: dict = Depends(auth.get_current_user)):
     if data["cv_status"] != "ready":
         return JSONResponse({"cv_status": data["cv_status"]}, status_code=202)
 
-    scores_path = sessions.session_dir(session_id) / "cv_scores.json"
-    scores = {}
-    if scores_path.exists():
-        scores = json.loads(scores_path.read_text(encoding="utf-8"))
+    scores = data.get("cv_scores") or {}
 
     return {"cv_status": "ready", "session": data, "scores": scores}
 
@@ -143,10 +139,16 @@ async def download_cv(session_id: str, user: dict = Depends(auth.get_current_use
         raise HTTPException(404, "Sesión no encontrada")
     auth.ensure_owner_or_admin(data, user)
 
-    folder = sessions.session_dir(session_id)
-    for candidate in folder.glob("cv_optimizado.*"):
-        return FileResponse(candidate, filename=candidate.name)
-    raise HTTPException(404, "El CV optimizado todavía no está listo")
+    path = data.get("cv_optimizado_path")
+    if not path:
+        raise HTTPException(404, "El CV optimizado todavía no está listo")
+
+    content = db.download_file(path)
+    return Response(
+        content,
+        media_type="application/octet-stream",
+        headers={"content-disposition": f'attachment; filename="{Path(path).name}"'},
+    )
 
 
 @app.post("/api/jobs")
@@ -180,11 +182,11 @@ async def vacantes(session_id: str, user: dict = Depends(auth.get_current_user))
     if data["jobs_status"] != "ready":
         return JSONResponse({"jobs_status": data["jobs_status"]}, status_code=202)
 
-    vac_path = sessions.session_dir(session_id) / "vacantes.json"
-    if not vac_path.exists():
+    vacantes = data.get("vacantes")
+    if not vacantes:
         return JSONResponse({"jobs_status": "pending"}, status_code=202)
 
-    return json.loads(vac_path.read_text(encoding="utf-8"))
+    return vacantes
 
 
 # ---------------------------------------------------------------------------
@@ -203,10 +205,59 @@ async def admin_notifications(user: dict = Depends(auth.require_admin)):
 
 @app.get("/api/admin/download/original/{session_id}")
 async def admin_download_original(session_id: str, user: dict = Depends(auth.require_admin)):
-    folder = sessions.session_dir(session_id)
-    for candidate in folder.glob("cv_original.*"):
-        return FileResponse(candidate, filename=candidate.name)
-    raise HTTPException(404, "No se encontró el CV original")
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    path = data.get("cv_original_path")
+    if not path:
+        raise HTTPException(404, "No se encontró el CV original")
+
+    content = db.download_file(path)
+    return Response(
+        content,
+        media_type="application/octet-stream",
+        headers={"content-disposition": f'attachment; filename="{Path(path).name}"'},
+    )
+
+
+@app.get("/api/admin/drive/authorize")
+async def admin_drive_authorize(user: dict = Depends(auth.require_admin)):
+    """Arma la URL de consentimiento de Google para conectar Drive (ver
+    backend/services/drive_oauth.py). El frontend redirige el navegador ahí."""
+    redirect_uri = os.getenv("DRIVE_OAUTH_REDIRECT_URI", "")
+    if not redirect_uri:
+        raise HTTPException(500, "Falta DRIVE_OAUTH_REDIRECT_URI en el servidor")
+    try:
+        authorize_url = drive_oauth.build_authorize_url(redirect_uri)
+    except Exception as e:
+        raise HTTPException(500, f"No se pudo armar la URL de autorización de Drive: {e}")
+    return {"authorize_url": authorize_url}
+
+
+@app.get("/api/admin/drive/oauth2callback")
+async def admin_drive_oauth2callback(request: Request):
+    """Google redirige acá después del consentimiento. No puede protegerse
+    con el login de admin (es una navegación directa desde Google, sin
+    header Authorization) -- se valida el `state` en su lugar, ver
+    drive_oauth.exchange_code."""
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    error = request.query_params.get("error")
+
+    if error:
+        return HTMLResponse(f"<p>Google devolvió un error: {error}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+    if not code or not state:
+        return HTMLResponse("<p>Faltan parámetros en la redirección de Google.</p>", status_code=400)
+
+    redirect_uri = os.getenv("DRIVE_OAUTH_REDIRECT_URI", "")
+    try:
+        creds = drive_oauth.exchange_code(redirect_uri, code, state)
+        drive_oauth.save_credentials(creds)
+    except Exception as e:
+        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+
+    return HTMLResponse("<p>Google Drive conectado correctamente. Ya podés cerrar esta pestaña.</p>")
 
 
 @app.post("/api/admin/{session_id}/cv")
@@ -222,12 +273,8 @@ async def admin_upload_cv(
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
 
-    folder = sessions.session_dir(session_id)
-
     ext = Path(file.filename or "cv.docx").suffix or ".docx"
-    dest = folder / f"cv_optimizado{ext}"
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    content = await file.read()
 
     raw = await scores_file.read()
     try:
@@ -241,12 +288,15 @@ async def admin_upload_cv(
     if missing:
         raise HTTPException(400, f"Al JSON le faltan estas claves: {', '.join(sorted(missing))}")
 
-    (folder / "cv_scores.json").write_text(
-        json.dumps(scores, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    optimizado_path = f"{session_id}/cv_optimizado{ext}"
+    db.upload_file(optimizado_path, content, file.content_type or "application/octet-stream")
 
     sessions.update_session(
-        session_id, cv_status="ready", cv_ready_at=datetime.now(timezone.utc).isoformat()
+        session_id,
+        cv_optimizado_path=optimizado_path,
+        cv_scores=scores,
+        cv_status="ready",
+        cv_ready_at=datetime.now(timezone.utc).isoformat(),
     )
     return {"status": "ok"}
 
@@ -268,13 +318,11 @@ async def admin_upload_vacantes(
     if "vacantes" not in parsed:
         raise HTTPException(400, "El JSON debe tener una clave 'vacantes' con la lista de ofertas.")
 
-    folder = sessions.session_dir(session_id)
-    (folder / "vacantes.json").write_text(
-        json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
     sessions.update_session(
-        session_id, jobs_status="ready", jobs_ready_at=datetime.now(timezone.utc).isoformat()
+        session_id,
+        vacantes=parsed,
+        jobs_status="ready",
+        jobs_ready_at=datetime.now(timezone.utc).isoformat(),
     )
     return {"status": "ok"}
 

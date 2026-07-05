@@ -216,4 +216,15 @@ async function loadNotifications() {
 
 document.getElementById("refresh-btn").addEventListener("click", () => loadRequests(true));
 
+document.getElementById("connect-drive-btn").addEventListener("click", async () => {
+  try {
+    const res = await JFAuth.authFetch("/api/admin/drive/authorize");
+    if (!res.ok) throw new Error((await res.json()).detail || "No se pudo conectar Drive");
+    const { authorize_url } = await res.json();
+    window.location.href = authorize_url;
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+});
+
 init();

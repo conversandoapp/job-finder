@@ -1,6 +1,5 @@
 backend/.env
 backend/storage/
-backend/credentials/service_account.json
 __pycache__/
 *.pyc
 venv/

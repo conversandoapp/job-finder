@@ -2,7 +2,7 @@ fastapi==0.111.0
 uvicorn[standard]==0.29.0
 python-multipart==0.0.9
 python-dotenv==1.0.1
-PyJWT[crypto]==2.8.0
+PyJWT[crypto]==2.13.0
 google-api-python-client==2.129.0
 google-auth==2.29.0
 google-auth-httplib2==0.2.0

@@ -57,6 +57,12 @@ async function renderReady(sessionData) {
   document.getElementById("score-before").textContent = scores.ats_score_original ?? "–";
   document.getElementById("score-after").textContent = scores.ats_score_optimizado ?? "–";
 
+  const topRole = (scores.roles_objetivo || [])[0];
+  const roleNote = document.getElementById("score-role-note");
+  roleNote.textContent = topRole
+    ? `Este puntaje refleja qué tan listo está tu CV para el puesto de ${topRole.titulo} — tu mejor match.`
+    : "";
+
   const kwList = document.getElementById("keywords-list");
   kwList.innerHTML = "";
   (scores.keywords_agregados || []).forEach((k) => {

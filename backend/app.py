@@ -246,7 +246,7 @@ async def admin_drive_oauth2callback(request: Request):
     error = request.query_params.get("error")
 
     if error:
-        return HTMLResponse(f"<p>Google devolvió un error: {error}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+        return HTMLResponse(f"<p>Google devolvió un error: {error}. Vuelve a /admin.html e intenta de nuevo.</p>", status_code=400)
     if not code or not state:
         return HTMLResponse("<p>Faltan parámetros en la redirección de Google.</p>", status_code=400)
 
@@ -255,9 +255,9 @@ async def admin_drive_oauth2callback(request: Request):
         creds = drive_oauth.exchange_code(redirect_uri, code, state)
         drive_oauth.save_credentials(creds)
     except Exception as e:
-        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Volvé a /admin.html e intentá de nuevo.</p>", status_code=400)
+        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Vuelve a /admin.html e intenta de nuevo.</p>", status_code=400)
 
-    return HTMLResponse("<p>Google Drive conectado correctamente. Ya podés cerrar esta pestaña.</p>")
+    return HTMLResponse("<p>Google Drive conectado correctamente. Ya puedes cerrar esta pestaña.</p>")
 
 
 @app.post("/api/admin/{session_id}/cv")

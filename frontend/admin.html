@@ -15,7 +15,7 @@
 <body>
 
 <div class="top-header">
-  <a class="brand top-header-link" href="/admin.html">🛠️ Job Finder <span class="tag">panel admin (solo vos)</span></a>
+  <a class="brand top-header-link" href="/admin.html">🛠️ Job Finder <span class="tag">panel admin (solo tú)</span></a>
 </div>
 <div class="user-bar" id="user-bar"></div>
 
@@ -31,7 +31,7 @@
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
         <div>
           <h2>Solicitudes pendientes y completadas</h2>
-          <p class="subtitle" style="margin-bottom:0;">Cuando alguien sube un CV o pide vacantes te avisamos por acá (y por email si lo activaste). Subí el resultado desde cada tarjeta cuando lo tengas listo.</p>
+          <p class="subtitle" style="margin-bottom:0;">Cuando alguien sube un CV o pide vacantes te avisamos por aquí (y por email si lo activaste). Sube el resultado desde cada tarjeta cuando lo tengas listo.</p>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button type="button" class="btn secondary" id="connect-drive-btn" style="margin-top:0; white-space:nowrap;">☁️ Conectar Google Drive</button>
@@ -45,7 +45,7 @@
   <div id="tab-notifications" style="display:none;">
     <div class="card">
       <h2>Historial de avisos</h2>
-      <p class="subtitle">Todo lo que te hubiéramos avisado por email queda registrado acá también.</p>
+      <p class="subtitle">Todo lo que te hubiéramos avisado por email queda registrado aquí también.</p>
     </div>
     <div id="notifications-list"></div>
   </div>
@@ -67,7 +67,7 @@
     <div class="req-cv-form">
       <h3>Subir CV optimizado</h3>
       <p class="subtitle" style="margin-bottom:8px;">
-        Generá el análisis con Claude usando el prompt de
+        Genera el análisis con Claude usando el prompt de
         <code>backend/schemas/prompt_para_claude_cv_analysis.md</code> — te devuelve
         el JSON con scores, roles, keywords y debilidades, y el texto del CV
         reescrito para que lo pegues en Word.
@@ -87,8 +87,8 @@
     <div class="req-vacantes-form">
       <h3>Subir vacantes.json</h3>
       <p class="subtitle" style="margin-bottom:8px;">
-        Generalo con Claude usando el prompt de
-        <code>backend/schemas/prompt_para_claude_vacantes.md</code> y subí el .json resultante.
+        Genéralo con Claude usando el prompt de
+        <code>backend/schemas/prompt_para_claude_vacantes.md</code> y sube el .json resultante.
       </p>
       <form class="vacantes-upload-form">
         <input type="file" name="file" accept=".json" required />

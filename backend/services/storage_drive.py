@@ -54,7 +54,7 @@ def _get_credentials():
     token_data = db.get_setting("drive_token")
     if not token_data:
         raise RuntimeError(
-            "No hay token de Drive todavía. Entrá a /admin.html y hacé click "
+            "No hay token de Drive todavía. Entra a /admin.html y haz clic "
             "en 'Conectar Google Drive'."
         )
 

@@ -53,7 +53,7 @@ async function loadRequests(force = false) {
   listEl.innerHTML = "";
 
   if (!requests.length) {
-    listEl.innerHTML = "<div class='card'>Todavía no hay solicitudes. Cuando alguien suba un CV aparecerá acá.</div>";
+    listEl.innerHTML = "<div class='card'>Todavía no hay solicitudes. Cuando alguien suba un CV aparecerá aquí.</div>";
     return;
   }
 
@@ -102,7 +102,7 @@ async function loadRequests(force = false) {
       const notice = document.createElement("p");
       notice.className = "subtitle";
       notice.style.marginBottom = "8px";
-      notice.textContent = "El usuario todavía no pidió buscar vacantes — podés subirlo igual si querés adelantarlo o probar cómo se ve.";
+      notice.textContent = "El usuario todavía no pidió buscar vacantes — puedes subirlo igual si quieres adelantarlo o probar cómo se ve.";
       vacFormWrap.insertBefore(notice, vacForm);
     } else if (req.jobs_status === "ready") {
       vacFormWrap.classList.add("done");

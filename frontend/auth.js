@@ -16,7 +16,7 @@ async function initSupabase() {
   const cfg = await _getConfig();
   if (!cfg.supabase_url || !cfg.supabase_anon_key) {
     throw new Error(
-      "Supabase no está configurado en el servidor. Revisá SUPABASE_URL y " +
+      "Supabase no está configurado en el servidor. Revisa SUPABASE_URL y " +
       "SUPABASE_ANON_KEY en backend/.env (ver README)."
     );
   }

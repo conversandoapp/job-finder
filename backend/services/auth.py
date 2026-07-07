@@ -103,7 +103,7 @@ def get_current_user(request: Request) -> dict:
     try:
         payload = _decode_token(token)
     except jwt.ExpiredSignatureError:
-        raise HTTPException(401, "Tu sesión expiró, volvé a iniciar sesión")
+        raise HTTPException(401, "Tu sesión expiró, vuelve a iniciar sesión")
     except jwt.InvalidTokenError as e:
         raise HTTPException(401, f"Token inválido: {e}")
 
@@ -119,7 +119,7 @@ def require_admin(request: Request) -> dict:
     """Dependency de FastAPI: exige que el usuario autenticado sea el admin."""
     user = get_current_user(request)
     if not is_admin(user):
-        raise HTTPException(403, "No tenés permisos de administrador para esta acción")
+        raise HTTPException(403, "No tienes permisos de administrador para esta acción")
     return user
 
 
@@ -129,4 +129,4 @@ def ensure_owner_or_admin(session_data: dict, user: dict) -> None:
         return
     if is_admin(user):
         return
-    raise HTTPException(403, "No tenés acceso a esta sesión")
+    raise HTTPException(403, "No tienes acceso a esta sesión")

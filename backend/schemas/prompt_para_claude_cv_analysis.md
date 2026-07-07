@@ -1,5 +1,12 @@
 # Prompt para generar `cv_analysis.json` con Claude
 
+> **Más rápido:** si tenés Claude Code disponible, usá el skill
+> `.claude/skills/cv-optimizer-jobfinder/` en vez de este proceso manual —
+> hace todo el flujo (extracción, scoring, reescritura, generación del
+> `.docx` y del `cv_analysis.json`) en un solo paso, sin copiar/pegar nada.
+> Esta guía queda como referencia/fallback para cuando solo tengas el chat
+> web de Claude a mano.
+
 Este es el flujo manual del MVP para la etapa de "análisis y optimización de CV":
 
 1. Entrás al panel admin (`/admin.html`), descargás el CV original de la

@@ -61,6 +61,6 @@ document.getElementById("signup-form").addEventListener("submit", async (e) => {
     return;
   }
 
-  msgEl.textContent = "✅ Cuenta creada. Si tu proyecto de Supabase pide confirmar el email, revisá tu correo antes de ingresar.";
+  msgEl.textContent = "✅ Cuenta creada. Si tu proyecto de Supabase pide confirmar el email, revisa tu correo antes de ingresar.";
   msgEl.className = "form-msg ok";
 });

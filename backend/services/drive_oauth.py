@@ -59,7 +59,7 @@ def exchange_code(redirect_uri: str, code: str, state: str) -> Credentials:
     code por credenciales. Lanza ValueError si el state no coincide."""
     pending = db.get_setting(_PENDING_STATE_KEY)
     if not pending or state != pending.get("state"):
-        raise ValueError("state inválido o expirado -- volvé a iniciar la conexión con Drive desde /admin.html")
+        raise ValueError("state inválido o expirado -- vuelve a iniciar la conexión con Drive desde /admin.html")
     db.delete_setting(_PENDING_STATE_KEY)
 
     flow = build_flow(redirect_uri)

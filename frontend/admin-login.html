@@ -5,28 +5,47 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Job Finder — Ingreso admin</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛠️</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/styles.css" />
 <link rel="stylesheet" href="/auth.css" />
 </head>
 <body>
 
-<div class="auth-wrap">
-  <div class="card auth-card">
-    <h1 style="text-align:center;">🛠️ Panel Admin</h1>
-    <p class="subtitle" style="text-align:center;">Solo para la cuenta administradora de Job Finder</p>
+<div class="auth-shell">
+  <div class="auth-hero admin">
+    <div class="auth-hero-inner">
+      <div class="auth-hero-brand">🛠️ Job Finder <span class="tag">panel admin</span></div>
+      <h1>El control center de todo el proceso</h1>
+      <p>Desde acá revisás cada solicitud, subís el CV optimizado y armás la plataforma de vacantes para cada candidato.</p>
+      <ul class="auth-hero-points">
+        <li><span class="dot">📋</span> Solicitudes y notificaciones en un solo lugar</li>
+        <li><span class="dot">☁️</span> Todo respaldado en Supabase y Google Drive</li>
+        <li><span class="dot">🔒</span> Acceso exclusivo para la cuenta administradora</li>
+      </ul>
+    </div>
+  </div>
 
-    <form id="signin-form" class="auth-form">
-      <label class="field-label">Email</label>
-      <input type="email" name="email" required />
-      <label class="field-label">Contraseña</label>
-      <input type="password" name="password" required />
-      <button type="submit" class="btn" style="width:100%;">Ingresar</button>
-      <div class="form-msg"></div>
-    </form>
+  <div class="auth-form-panel">
+    <div class="card auth-card">
+      <div class="brand-mark">🛠️ Job Finder</div>
+      <h1 style="text-align:center; font-size:22px;">Panel Admin</h1>
+      <p class="subtitle" style="text-align:center;">Solo para la cuenta administradora de Job Finder</p>
 
-    <p class="subtitle" style="text-align:center; margin-top:18px;">
-      ¿Sos un usuario buscando trabajo? <a href="/login.html">Ingresá acá</a>
-    </p>
+      <form id="signin-form" class="auth-form">
+        <label class="field-label">Email</label>
+        <input type="email" name="email" required />
+        <label class="field-label">Contraseña</label>
+        <input type="password" name="password" required />
+        <button type="submit" class="btn" style="width:100%;">Ingresar</button>
+        <div class="form-msg"></div>
+      </form>
+
+      <p class="subtitle" style="text-align:center; margin-top:18px; margin-bottom:0;">
+        ¿Sos un usuario buscando trabajo? <a href="/login.html">Ingresá acá</a>
+      </p>
+    </div>
   </div>
 </div>
 

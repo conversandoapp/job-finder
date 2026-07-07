@@ -47,12 +47,34 @@ a { color: var(--blue); text-decoration: none; }
   font-weight: 700;
   font-size: 18px;
 }
+a.top-header-link {
+  color: white;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.15s;
+}
+a.top-header-link:hover { opacity: 0.85; }
 .top-header .brand span.tag {
   font-weight: 400;
   font-size: 13px;
   opacity: 0.85;
   margin-left: 4px;
 }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.back-link:hover { color: var(--blue); }
+
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
 
 .card {
   background: white;
@@ -178,7 +200,7 @@ button.btn.secondary:hover { background: var(--blue-light); }
   border: 6px solid;
 }
 .score-circle .lbl { font-size: 11px; font-weight: 500; color: var(--text-muted); margin-top: 2px; }
-.score-circle.before { border-color: #e08e0b; color: #e08e0b; }
+.score-circle.before { border-color: var(--orange); color: var(--orange); }
 .score-circle.after { border-color: var(--green); color: var(--green); }
 
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }

@@ -66,6 +66,7 @@
 }
 .job-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .job-card.cat-alta_relevancia { border-left-color: var(--red); }
+.job-card.cat-ventaja_interna { border-left-color: #e2711d; }
 .job-card.cat-remoto_latam { border-left-color: var(--green); }
 .job-card.cat-media { border-left-color: var(--yellow); }
 .job-card.cat-especializado { border-left-color: var(--blue-600); }

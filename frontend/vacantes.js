@@ -3,6 +3,7 @@ const sessionId = params.get("session");
 
 const CATEGORY_META = {
   alta_relevancia: { label: "🔴 Alta relevancia", color: "#c0392b" },
+  ventaja_interna: { label: "🟠 Ventaja interna", color: "#e2711d" },
   remoto_latam: { label: "🟢 Remoto LATAM", color: "#1a7f4b" },
   media: { label: "🟡 Media", color: "#b8960c" },
   especializado: { label: "🔵 Especializado", color: "#0077b5" },

@@ -1,5 +1,8 @@
 # Job Finder — MVP manual
 
+> **Mapa técnico completo del repo:** ver [`ARCHITECTURE.md`](ARCHITECTURE.md)
+> (modelo de datos, endpoints, servicios, OAuth de Drive, skills de Claude Code).
+
 MVP del flujo de "optimizar CV + encontrar vacantes", pero **manual**: no hay
 agentes de IA corriendo automáticamente en el servidor. El sistema solo
 recibe solicitudes, te avisa a vos (el admin) y te da un panel para subir

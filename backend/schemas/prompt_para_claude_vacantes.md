@@ -1,5 +1,12 @@
 # Prompt para generar `vacantes.json` con Claude
 
+> **Más rápido:** si tenés Claude Code con control de navegador (Chrome)
+> disponible, usá el skill `.claude/skills/vacantes-linkedin-jobfinder/` en
+> vez de este proceso manual — navega LinkedIn en vivo, arma el ranking y
+> genera el `vacantes.json` en un solo paso, sin copiar/pegar nada. Esta
+> guía queda como referencia/fallback para cuando solo tengas el chat web
+> de Claude a mano.
+
 Este es el flujo manual del MVP para la etapa de "búsqueda de vacantes":
 
 1. Entrás a LinkedIn (o donde busques vacantes) con las queries sugeridas en
@@ -29,7 +36,7 @@ Te voy a pasar:
 Tu tarea:
 1. Limpiar y estructurar cada vacante.
 2. Rankearlas por relevancia para el perfil (match de título, skills requeridos vs disponibles, competencia, urgencia).
-3. Clasificar cada una en una categoría: "alta_relevancia", "remoto_latam", "media" o "especializado".
+3. Clasificar cada una en una categoría: "alta_relevancia", "ventaja_interna" (empresas donde el candidato ya trabajó), "remoto_latam", "media" o "especializado".
 4. Elegir las 5 mejores como top5_ids.
 5. Escribir una nota de estrategia de postulación personalizada (2-4 oraciones).
 6. Devolver SOLO un JSON válido con esta estructura exacta (sin markdown, sin texto adicional):
@@ -59,7 +66,7 @@ Tu tarea:
       "solicitud_sencilla": true,
       "url": "https://www.linkedin.com/jobs/view/...",
       "descripcion_corta": "",
-      "categoria": "alta_relevancia | remoto_latam | media | especializado",
+      "categoria": "alta_relevancia | ventaja_interna | remoto_latam | media | especializado",
       "match_porcentaje": 0
     }
   ]

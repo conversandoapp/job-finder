@@ -91,16 +91,17 @@ candidato podría postular realistamente, según:
 
 Ordená de mayor a menor match (mejor match primero) y marcá el primero
 con ⭐ — **ese rol #1 es el que se usa en el Paso 3 para el score
-"antes/después"**, así que mostrale al admin la lista completa y esperá
-confirmación (puede agregar, sacar o reordenar) antes de seguir, ya que
-cambiar el rol #1 cambia contra qué se puntúa el CV.
+"antes/después"**. Mostrá la lista al admin como notificación y **continuá
+inmediatamente** sin esperar respuesta — si el admin quiere cambiar el orden,
+puede avisarte y se recalcula, pero el proceso no se detiene.
 
 ```
-Roles identificados:
-1. Product Owner Senior ⭐ (mejor match — score ATS contra este rol)
+Roles identificados (continuando con el proceso):
+1. Product Owner Senior ⭐ (score ATS se calcula contra este rol)
 2. Product Manager
 3. Scrum Master
 4. IT Project Coordinator
+→ Si querés ajustar el orden, avisame; de lo contrario ya estoy calculando el score.
 ```
 
 ---
@@ -131,9 +132,11 @@ puntos y qué keywords del rol #1 faltan — esa info alimenta
 
 ---
 
-## Paso 4 — Planificar mejoras
+## Paso 4 — Planificar y aplicar mejoras (sin pausa)
 
-Antes de escribir nada, armá un plan explícito, separado en dos columnas:
+Identificá internamente qué mejoras son posibles con la información
+disponible en el CV y **aplicalas directamente** en el Paso 5, sin pedir
+confirmación. Clasificá cada mejora posible en una de estas dos categorías:
 
 **✅ Se puede implementar** (la información ya existe en el CV):
 - Agregar la keyword X naturalmente al bullet Y de la empresa Z
@@ -141,16 +144,20 @@ Antes de escribir nada, armá un plan explícito, separado en dos columnas:
 - Agregar skills faltantes a la sección de habilidades
 - Fusionar bullets duplicados para liberar espacio
 - Reorganizar secciones para mejor legibilidad ATS
+- Agregar Perfil Profesional / tagline si no existe (redactado con info del CV)
+- Crear sección Habilidades Técnicas con herramientas ya mencionadas en la experiencia
 
-**❌ No se puede implementar** (requiere información que no está en el CV):
-- Agregar métricas (no hay números en el original)
+**❌ No se puede implementar** (requiere información que el candidato no puso en el CV):
+- Agregar métricas o logros cuantificables (no hay números en el original)
 - Agregar certificaciones que el candidato no tiene
 - Agregar experiencia en una tecnología no mencionada
 - Subir el título de un cargo por encima de lo que dice el CV
 - Agregar estudios no mencionados
+- Agregar sección de Idiomas (si no están mencionados en ningún lado)
 
-Mostrale este plan al admin y esperá confirmación antes de aplicar. Si el
-admin agrega info nueva para algún ítem "❌", incorporala.
+Los ítems ❌ se reportan en `debilidades` del JSON (ver Paso 8) y se listan
+en el resumen final del chat (ver Paso 9). **No interrumpas el proceso para
+pedir confirmación del plan** — aplicá todo lo posible y avanzá.
 
 ---
 
@@ -259,8 +266,18 @@ Reglas:
   no el score ATS).
 - `keywords_agregados`: las keywords que el CV mejorado tiene y el
   original no tenía.
-- `debilidades`: los problemas del CV **original** (no del mejorado),
-  tomados de lo que restó puntos en el Paso 3.
+- `debilidades`: limitaciones **reales del perfil del candidato** que no
+  pueden resolverse solo con mejor redacción — son cosas que el candidato
+  tendría que hacer en su carrera o vida real para mejorar su CV en el
+  futuro. Incluí tanto lo que detectó el rubric ATS (Paso 3) como los
+  ítems ❌ del Paso 4. Ejemplos típicos:
+  - "No tiene métricas ni logros cuantificables en ningún rol"
+  - "Falta formación académica formal en el área de su rol objetivo"
+  - "No menciona certificaciones relevantes (ej. PMP, Scrum, etc.)"
+  - "Sin experiencia documentada en [tecnología clave del rol #1]"
+  - "No incluye idiomas — si habla inglés u otro, debería agregarlo"
+  Escribilos como recomendaciones accionables para el candidato, no como
+  críticas al CV redactado.
 
 ---
 

@@ -3,23 +3,37 @@ name: vacantes-linkedin-jobfinder
 description: >
   Arma la plataforma de vacantes de LinkedIn para un candidato de Job Finder,
   a partir de su CV optimizado. Úsalo cuando el admin quiera: buscar vacantes
-  de LinkedIn para un candidato, armar/generar el vacantes.json que exige la
-  sección "Subir vacantes.json" del panel admin, o procesar una solicitud de
-  búsqueda de empleo. Se activa con frases como "arma la plataforma de
-  vacantes", "busca vacantes de LinkedIn para este candidato", "generame el
-  vacantes.json", "procesa esta solicitud de vacantes". El input es la ruta
-  del CV **optimizado** (.docx, el que generó el skill cv-optimizer-jobfinder)
-  de la persona. Requiere navegación real de LinkedIn en Chrome (herramientas
-  tipo claude-in-chrome: navigate, get_page_text, computer, find).
+  de LinkedIn para un candidato, armar/generar el vacantes_{nombre}.json que
+  exige la sección "Subir vacantes.json" del panel admin, o procesar una
+  solicitud de búsqueda de empleo. Se activa con frases como "arma la
+  plataforma de vacantes", "busca vacantes de LinkedIn para este candidato",
+  "generame el vacantes.json", "procesa esta solicitud de vacantes". El input
+  es la ruta del CV **optimizado** (.docx, el que generó el skill
+  cv-optimizer-jobfinder) de la persona. Requiere navegación real de LinkedIn
+  en Chrome (herramientas tipo claude-in-chrome: navigate, get_page_text,
+  computer, find).
 ---
 
-# Vacantes LinkedIn — Job Finder (búsqueda real + vacantes.json)
+# Vacantes LinkedIn — Job Finder (búsqueda real + vacantes_{nombre}.json)
 
 Este skill reemplaza el proceso manual de `backend/schemas/prompt_para_claude_vacantes.md`
 (copiar y pegar vacantes encontradas a mano): navega LinkedIn Jobs en Chrome
 para el perfil del candidato, arma un ranking honesto de vacantes reales, y
-genera directamente el `vacantes.json` con el esquema exacto que necesita
-`/vacantes.html`.
+genera directamente el `vacantes_{nombre}.json` con el esquema exacto que
+necesita `/vacantes.html`.
+
+## Output obligatorio
+
+Este skill genera exactamente **un archivo JSON**, usando el **primer nombre
+del postulante en minúsculas y sin tildes** como parte del nombre:
+
+| Archivo | Formato | Descripción |
+|---|---|---|
+| `vacantes_{nombre}.json` | JSON | Vacantes rankeadas con stats, Top 5 y notas de estrategia |
+
+Ejemplo: postulante "Andrés García" → `vacantes_andres.json`.
+El archivo se guarda en la misma carpeta que el CV optimizado.
+El admin lo sube manualmente desde `/admin.html`, sección "Subir vacantes.json".
 
 **A diferencia de un generador de informe HTML**, acá no se genera ningún
 HTML: la plataforma (`vacantes.html` + `vacantes.js` + `vacantes.css`) ya
@@ -182,11 +196,13 @@ Para cada vacante, 2-4 líneas que:
 
 ---
 
-## Paso 7 — Generar `vacantes.json`
+## Paso 7 — Generar `vacantes_{nombre}.json`
 
-Escribí, en la misma carpeta del CV optimizado, un `vacantes.json` con
-**exactamente** este esquema (sin `session_id`, `generado_el`,
-`candidato.cargo_objetivo` ni `candidato.pais`):
+Escribí, en la misma carpeta del CV optimizado, el archivo
+`vacantes_{nombre}.json` (donde `{nombre}` es el primer nombre del postulante
+en minúsculas y sin tildes, ej: `vacantes_andres.json`) con **exactamente**
+este esquema (sin `session_id`, `generado_el`, `candidato.cargo_objetivo`
+ni `candidato.pais`):
 
 ```json
 {
@@ -235,8 +251,9 @@ Reglas:
   aclaralo en `descripcion_corta`.
 - `id` único por vacante (`job_001`, `job_002`, ...).
 
-**Nombre del archivo:** `vacantes_<Nombre_Apellido>.json`, guardado en la
-misma carpeta que el CV optimizado.
+**Nombre del archivo:** `vacantes_{nombre}.json` (primer nombre en minúsculas
+y sin tildes), guardado en la misma carpeta que el CV optimizado.
+Ejemplo: "Andrés García" → `vacantes_andres.json`.
 
 ---
 
@@ -266,7 +283,7 @@ para `notas_estrategia`).
 
 Este skill **no sube nada a la API directamente**. Recordale al admin que
 tiene que ir a `/admin.html`, a la tarjeta de esa solicitud, sección "Subir
-vacantes.json", y subir ahí el archivo generado.
+vacantes.json", y subir ahí el archivo `vacantes_{nombre}.json` generado.
 
 ---
 

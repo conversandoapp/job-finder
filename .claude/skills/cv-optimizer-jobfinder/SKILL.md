@@ -3,22 +3,35 @@ name: cv-optimizer-jobfinder
 description: >
   Optimizador de CVs con scoring ATS para el flujo de admin de Job Finder. Úsalo
   cuando el admin quiera: optimizar el CV de un candidato para el panel
-  (/admin.html), generar el .docx optimizado + el cv_analysis.json que exige
-  la sección "Subir CV optimizado" del panel, o puntuar un CV para un rol
-  objetivo. Se activa con frases como "optimiza este CV para el panel",
-  "generame el cv_analysis.json de este candidato", "puntúa este CV",
-  "procesa esta solicitud de CV". El archivo de entrada puede ser PDF o
-  Word (.docx) -- el skill detecta el formato solo.
+  (/admin.html), generar los dos outputs que exige la sección "Subir CV
+  optimizado" del panel (cv_optimizado_{nombre}.docx y analysis_{nombre}.json),
+  o puntuar un CV para un rol objetivo. Se activa con frases como "optimiza
+  este CV para el panel", "generame el analysis_json de este candidato",
+  "puntúa este CV", "procesa esta solicitud de CV". El archivo de entrada
+  puede ser PDF o Word (.docx) -- el skill detecta el formato solo.
 ---
 
-# CV Optimizer — Job Finder (scoring ATS + cv_analysis.json)
+# CV Optimizer — Job Finder (scoring ATS + outputs con nombre del postulante)
 
 Este skill reemplaza el proceso manual de `backend/schemas/prompt_para_claude_cv_analysis.md`
 (copiar y pegar un prompt en el chat web de Claude): lee el CV del candidato,
 identifica los roles objetivo, lo puntúa como un ATS, aplica mejoras de
-keywords y estructura **sin inventar información**, genera el `.docx`
-optimizado listo para subir, y genera también el `cv_analysis.json` con el
-esquema exacto que el panel admin necesita.
+keywords y estructura **sin inventar información**, y genera los **dos outputs
+obligatorios** listos para subir al panel admin.
+
+## Outputs obligatorios
+
+Este skill genera exactamente **dos archivos**, usando el **primer nombre del
+postulante en minúsculas** como parte del nombre (por ejemplo, si el
+postulante se llama "Andrés García", `{nombre}` = `andres`):
+
+| Archivo | Formato | Descripción |
+|---|---|---|
+| `cv_optimizado_{nombre}.docx` | Word (.docx) | CV mejorado, ATS-friendly, listo para subir |
+| `analysis_{nombre}.json` | JSON | Análisis ATS con scores, roles, keywords y debilidades |
+
+Ambos se guardan en el mismo directorio que el CV de entrada.
+El admin los sube manualmente desde `/admin.html`, sección "Subir CV optimizado".
 
 ## Por qué el JSON tiene este esquema exacto
 
@@ -198,9 +211,10 @@ mejorado como `.docx` ATS-friendly:
 9. Idiomas
 10. Referencias (si están en el original)
 
-**Nombre del archivo de salida:** mismo nombre que la entrada +
-sufijo `_optimizado`. Ejemplo: `MiCV.pdf` → `MiCV_optimizado.docx`. Se
-guarda en el mismo directorio que el archivo de entrada.
+**Nombre del archivo de salida:** `cv_optimizado_{nombre}.docx`, donde
+`{nombre}` es el **primer nombre del postulante en minúsculas y sin tildes**
+(ejemplo: postulante "Andrés García" → `cv_optimizado_andres.docx`).
+Se guarda en el mismo directorio que el archivo de entrada.
 
 Escribí el script en una ruta temporal, corré con `node`, y copiá el
 resultado al directorio de salida.
@@ -218,11 +232,12 @@ tr -d '\0' < generate_cv.js > generate_cv_clean.js && node generate_cv_clean.js
 
 ---
 
-## Paso 8 — Generar `cv_analysis.json`
+## Paso 8 — Generar `analysis_{nombre}.json`
 
-Generá, en el mismo directorio, un `cv_analysis.json` con **exactamente**
-estas 5 claves (sin `session_id`, `resumen` ni `cv_reescrito` — no los usa
-el frontend, ver la nota de arriba):
+Generá, en el mismo directorio que el CV de entrada, el archivo
+`analysis_{nombre}.json` (mismo `{nombre}` usado en el Paso 7, ej:
+`analysis_andres.json`) con **exactamente** estas 5 claves (sin `session_id`,
+`resumen` ni `cv_reescrito` — no los usa el frontend, ver la nota de arriba):
 
 ```json
 {
@@ -261,10 +276,12 @@ Los ítems de la columna ❌, con una breve explicación de por qué y qué
 necesitaría el candidato para poder aplicarlos.
 
 ### 📎 Archivos generados y próximo paso
-- `NombreDelCV_optimizado.docx`
-- `cv_analysis.json`
 
-Recordale al admin que todavía tiene que subir ambos archivos a mano desde
+Los dos outputs generados son:
+- `cv_optimizado_{nombre}.docx` — CV optimizado en Word, ATS-friendly
+- `analysis_{nombre}.json` — Análisis ATS con scores, roles, keywords y debilidades
+
+Recordale al admin que todavía tiene que subir **ambos archivos** a mano desde
 `/admin.html`, en la tarjeta de la solicitud correspondiente, sección
 "Subir CV optimizado" — este skill no llama a la API directamente.
 

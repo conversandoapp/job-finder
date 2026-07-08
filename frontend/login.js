@@ -1,13 +1,27 @@
 const params = new URLSearchParams(window.location.search);
 const redirectTo = params.get("redirect") || "/index.html";
 
-document.querySelectorAll(".tab-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById("signin-form").style.display = btn.dataset.tab === "signin" ? "block" : "none";
-    document.getElementById("signup-form").style.display = btn.dataset.tab === "signup" ? "block" : "none";
+function showPanel(panel) {
+  document.getElementById("signin-form").style.display = panel === "signin" ? "block" : "none";
+  document.getElementById("signup-form").style.display = panel === "signup" ? "block" : "none";
+  document.getElementById("forgot-form").style.display = panel === "forgot" ? "block" : "none";
+  document.querySelectorAll(".tab-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === panel);
   });
+}
+
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => showPanel(btn.dataset.tab));
+});
+
+document.getElementById("forgot-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  showPanel("forgot");
+});
+
+document.getElementById("back-to-signin").addEventListener("click", (e) => {
+  e.preventDefault();
+  showPanel("signin");
 });
 
 async function init() {
@@ -63,4 +77,28 @@ document.getElementById("signup-form").addEventListener("submit", async (e) => {
 
   msgEl.textContent = "✅ Cuenta creada. Si tu proyecto de Supabase pide confirmar el email, revisa tu correo antes de ingresar.";
   msgEl.className = "form-msg ok";
+});
+
+document.getElementById("forgot-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const msgEl = form.querySelector(".form-msg");
+  msgEl.textContent = "";
+  msgEl.className = "form-msg";
+
+  const client = await JFAuth.initSupabase();
+  const resetUrl = `${window.location.origin}/reset-password.html`;
+  const { error } = await client.auth.resetPasswordForEmail(form.email.value, {
+    redirectTo: resetUrl,
+  });
+
+  if (error) {
+    msgEl.textContent = "❌ " + error.message;
+    msgEl.className = "form-msg err";
+    return;
+  }
+
+  msgEl.textContent = "✅ Si ese email tiene una cuenta, recibirás un link para restablecer tu contraseña. Revisa también la carpeta de spam.";
+  msgEl.className = "form-msg ok";
+  form.querySelector("input").value = "";
 });

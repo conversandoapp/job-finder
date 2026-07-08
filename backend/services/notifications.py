@@ -72,7 +72,9 @@ def send_notification(subject: str, body: str) -> dict:
 
             result = {"mode": "email", "sent": True, "error": None}
         except Exception as e:  # noqa: BLE001
-            result = {"mode": "email", "sent": False, "error": str(e)}
+            import traceback
+        print(f"[notifications] ERROR enviando email: {e}\n{traceback.format_exc()}")
+        result = {"mode": "email", "sent": False, "error": str(e)}
 
     # Siempre guardamos el registro en Supabase también, así el panel admin
     # siempre tiene el historial completo de avisos.

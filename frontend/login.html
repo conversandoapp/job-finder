@@ -46,6 +46,20 @@
         <input type="password" name="password" required />
         <button type="submit" class="btn" style="width:100%;">Ingresar</button>
         <div class="form-msg"></div>
+        <div style="text-align:center; margin-top:12px;">
+          <a href="#" id="forgot-link" style="font-size:13px; color:var(--blue-600); text-decoration:none;">¿Olvidaste tu contraseña?</a>
+        </div>
+      </form>
+
+      <form id="forgot-form" class="auth-form" style="display:none;">
+        <p style="font-size:14px; color:var(--text-muted); margin:0 0 16px;">Ingresa tu email y te enviaremos un link para restablecer tu contraseña.</p>
+        <label class="field-label">Email</label>
+        <input type="email" name="email" required />
+        <button type="submit" class="btn" style="width:100%;">Enviar link de recuperación</button>
+        <div class="form-msg"></div>
+        <div style="text-align:center; margin-top:12px;">
+          <a href="#" id="back-to-signin" style="font-size:13px; color:var(--blue-600); text-decoration:none;">← Volver al inicio de sesión</a>
+        </div>
       </form>
 
       <form id="signup-form" class="auth-form" style="display:none;">

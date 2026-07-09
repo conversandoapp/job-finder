@@ -16,7 +16,7 @@ Este es el flujo manual del MVP para la etapa de "búsqueda de vacantes":
    No hace falta que sea perfecto — texto pegado de la propia página de LinkedIn sirve.
 3. Le pegás todo eso a Claude junto con el prompt de abajo.
 4. Claude te devuelve el JSON ya armado, listo para subir en el panel admin
-   (`/admin.html` → sección "Subir vacantes.json" de esa sesión).
+   (`/admin` → sección "Subir vacantes.json" de esa sesión).
 
 La plataforma (`/vacantes.html`) renderiza automáticamente ese JSON como una
 página tipo LinkedIn con filtros, cards, top 5 y estadísticas — vos no tenés

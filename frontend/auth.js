@@ -45,12 +45,12 @@ async function requireAuth(loginPage = "/login.html") {
 }
 
 async function requireAdmin() {
-  const session = await requireAuth("/admin-login.html");
+  const session = await requireAuth("/admin-login");
   if (!session) return null;
 
   const res = await authFetch("/api/whoami");
   if (!res.ok) {
-    _redirectToLogin("/admin-login.html");
+    _redirectToLogin("/admin-login");
     return null;
   }
   const who = await res.json();

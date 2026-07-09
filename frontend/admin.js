@@ -1,7 +1,7 @@
 async function init() {
   const who = await JFAuth.requireAdmin();
   if (!who) return; // requireAdmin ya redirige o muestra "acceso denegado"
-  JFAuth.renderUserBar("user-bar", "/admin-login.html");
+  JFAuth.renderUserBar("user-bar", "/admin-login");
   loadRequests();
   setInterval(() => loadRequests(false), 15000);
 }
@@ -82,6 +82,12 @@ async function loadRequests(force = false) {
     if (req.user_email) {
       linksHtml += ` <span style="color:#5b6b76;">👤 ${req.user_email}</span>`;
     }
+    if (req.cv_status === "ready") {
+      linksHtml += ` <a href="/resultado.html?session=${req.session_id}" target="_blank">👁️ Ver análisis de CV</a>`;
+    }
+    if (req.jobs_status === "ready") {
+      linksHtml += ` <a href="/vacantes.html?session=${req.session_id}" target="_blank">👁️ Ver vacantes</a>`;
+    }
     linksEl.innerHTML = linksHtml;
     linksEl.querySelector(".download-original").addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -90,14 +96,18 @@ async function loadRequests(force = false) {
 
     const cvFormWrap = node.querySelector(".req-cv-form");
     const cvForm = node.querySelector(".cv-upload-form");
+    const deleteCvBtn = node.querySelector(".btn-delete-cv");
     if (req.cv_status === "ready") {
       cvFormWrap.classList.add("done");
-      cvForm.querySelector("button").textContent = "Ya subido — volver a subir";
+      cvForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
+      deleteCvBtn.style.display = "";
     }
-    cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id));
+    cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, req.cv_status === "ready"));
+    deleteCvBtn.addEventListener("click", () => handleDeleteCv(req.session_id));
 
     const vacFormWrap = node.querySelector(".req-vacantes-form");
     const vacForm = node.querySelector(".vacantes-upload-form");
+    const deleteVacantesBtn = node.querySelector(".btn-delete-vacantes");
     if (req.jobs_status === "not_requested") {
       const notice = document.createElement("p");
       notice.className = "subtitle";
@@ -106,9 +116,11 @@ async function loadRequests(force = false) {
       vacFormWrap.insertBefore(notice, vacForm);
     } else if (req.jobs_status === "ready") {
       vacFormWrap.classList.add("done");
-      vacForm.querySelector("button").textContent = "Ya subido — volver a subir";
+      vacForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
+      deleteVacantesBtn.style.display = "";
     }
-    vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id));
+    vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id, req.jobs_status === "ready"));
+    deleteVacantesBtn.addEventListener("click", () => handleDeleteVacantes(req.session_id));
 
     listEl.appendChild(node);
   });
@@ -146,8 +158,11 @@ async function downloadOriginal(sessionId) {
   }
 }
 
-async function handleCvUpload(e, sessionId) {
+async function handleCvUpload(e, sessionId, isReplace) {
   e.preventDefault();
+  if (isReplace && !confirm("Esto reemplazará el análisis de CV actual de este candidato. ¿Continuar?")) {
+    return;
+  }
   const form = e.target;
   const msgEl = form.querySelector(".form-msg");
   msgEl.textContent = "";
@@ -172,8 +187,11 @@ async function handleCvUpload(e, sessionId) {
   }
 }
 
-async function handleVacantesUpload(e, sessionId) {
+async function handleVacantesUpload(e, sessionId, isReplace) {
   e.preventDefault();
+  if (isReplace && !confirm("Esto reemplazará las vacantes actuales de este candidato. ¿Continuar?")) {
+    return;
+  }
   const form = e.target;
   const msgEl = form.querySelector(".form-msg");
   msgEl.textContent = "";
@@ -194,6 +212,38 @@ async function handleVacantesUpload(e, sessionId) {
   } catch (err) {
     msgEl.textContent = "❌ " + err.message;
     msgEl.className = "form-msg err";
+  }
+}
+
+async function handleDeleteCv(sessionId) {
+  if (!confirm("¿Borrar el análisis de CV de este candidato? Esta acción no se puede deshacer.")) {
+    return;
+  }
+  try {
+    const res = await JFAuth.authFetch(`/api/admin/${sessionId}/cv`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al borrar");
+    }
+    loadRequests(true);
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+}
+
+async function handleDeleteVacantes(sessionId) {
+  if (!confirm("¿Borrar las vacantes de este candidato? Esta acción no se puede deshacer.")) {
+    return;
+  }
+  try {
+    const res = await JFAuth.authFetch(`/api/admin/${sessionId}/vacantes`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Error al borrar");
+    }
+    loadRequests(true);
+  } catch (err) {
+    alert("❌ " + err.message);
   }
 }
 

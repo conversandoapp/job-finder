@@ -93,7 +93,7 @@ def notify_cv_uploaded(session_id: str, candidate_name: str | None, pais: str,
         f"LinkedIn: {linkedin_url or '(no provisto)'}\n"
         f"CV en Drive: {drive_link or '(no disponible, descargalo desde el panel admin)'}\n\n"
         f"Entra al panel admin para subir el CV optimizado cuando esté listo:\n"
-        f"{_base_url()}/admin.html#{session_id}\n"
+        f"{_base_url()}/admin#{session_id}\n"
     )
     return send_notification(subject, body)
 
@@ -106,6 +106,6 @@ def notify_jobs_requested(session_id: str, candidate_name: str | None, pais: str
         f"Nombre: {candidate_name or '(no detectado)'}\n"
         f"País: {pais}\n\n"
         f"Entra al panel admin para subir el vacantes.json cuando esté listo:\n"
-        f"{_base_url()}/admin.html#{session_id}\n"
+        f"{_base_url()}/admin#{session_id}\n"
     )
     return send_notification(subject, body)

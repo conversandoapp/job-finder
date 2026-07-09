@@ -9,7 +9,7 @@
 
 Este es el flujo manual del MVP para la etapa de "análisis y optimización de CV":
 
-1. Entrás al panel admin (`/admin.html`), descargás el CV original de la
+1. Entrás al panel admin (`/admin`), descargás el CV original de la
    solicitud (botón "📄 Descargar CV original").
 2. Le pegás el texto del CV a Claude junto con el prompt de abajo.
 3. Claude te devuelve un JSON con el análisis completo (scores, roles,

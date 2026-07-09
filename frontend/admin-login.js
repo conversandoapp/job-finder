@@ -5,7 +5,7 @@ async function init() {
     if (res.ok) {
       const who = await res.json();
       if (who.is_admin) {
-        window.location.href = "/admin.html";
+        window.location.href = "/admin";
         return;
       }
     }
@@ -41,5 +41,5 @@ document.getElementById("signin-form").addEventListener("submit", async (e) => {
     return;
   }
 
-  window.location.href = "/admin.html";
+  window.location.href = "/admin";
 });

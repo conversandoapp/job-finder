@@ -6,6 +6,25 @@ async function init() {
   setInterval(() => loadAll(false), 15000);
 }
 
+// Fichas expandidas (colapsadas por defecto). Se mantiene en memoria para
+// que no se cierren solas en cada auto-refresh de 15s. Compartido entre
+// "Por revisar" y "Todas las solicitudes" (misma sesión = mismo estado).
+const expandedIds = new Set();
+
+function applyCollapseBehavior(cardEl, sessionId) {
+  if (!expandedIds.has(sessionId)) {
+    cardEl.classList.add("collapsed");
+  }
+  cardEl.querySelector(".req-header").addEventListener("click", () => {
+    cardEl.classList.toggle("collapsed");
+    if (cardEl.classList.contains("collapsed")) {
+      expandedIds.delete(sessionId);
+    } else {
+      expandedIds.add(sessionId);
+    }
+  });
+}
+
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -55,6 +74,10 @@ async function loadAll(force = false) {
   const res = await JFAuth.authFetch("/api/backoffice/requests");
   const requests = await res.json();
 
+  if (window.location.hash) {
+    expandedIds.add(window.location.hash.slice(1));
+  }
+
   const reviewListEl = document.getElementById("review-list");
   const allListEl = document.getElementById("all-list");
   reviewListEl.innerHTML = "";
@@ -73,6 +96,11 @@ async function loadAll(force = false) {
     allListEl.innerHTML = "<div class='card'>Todavía no hay solicitudes.</div>";
   } else {
     requests.forEach(req => allListEl.appendChild(buildReadonlyCard(req)));
+  }
+
+  if (window.location.hash) {
+    const target = document.getElementById(window.location.hash.slice(1));
+    if (target) target.scrollIntoView({ behavior: "smooth" });
   }
 }
 
@@ -111,6 +139,7 @@ function buildReviewCard(req) {
   const cardEl = node.querySelector(".request-card");
   cardEl.id = req.session_id;
   fillHeader(node, req);
+  applyCollapseBehavior(cardEl, req.session_id);
 
   const cvBlock = node.querySelector(".req-cv-review");
   if (req.cv_status === "pending_review") {
@@ -133,6 +162,7 @@ function buildReadonlyCard(req) {
   const cardEl = node.querySelector(".request-card");
   cardEl.id = `all-${req.session_id}`;
   fillHeader(node, req);
+  applyCollapseBehavior(cardEl, req.session_id);
   return node;
 }
 

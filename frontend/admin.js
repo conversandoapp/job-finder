@@ -6,6 +6,24 @@ async function init() {
   setInterval(() => loadRequests(false), 15000);
 }
 
+// Fichas expandidas por el admin (colapsadas por defecto). Se mantiene en
+// memoria para que no se cierren solas en cada auto-refresh de 15s.
+const expandedIds = new Set();
+
+function applyCollapseBehavior(cardEl, sessionId) {
+  if (!expandedIds.has(sessionId)) {
+    cardEl.classList.add("collapsed");
+  }
+  cardEl.querySelector(".req-header").addEventListener("click", () => {
+    cardEl.classList.toggle("collapsed");
+    if (cardEl.classList.contains("collapsed")) {
+      expandedIds.delete(sessionId);
+    } else {
+      expandedIds.add(sessionId);
+    }
+  });
+}
+
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -61,6 +79,10 @@ async function loadRequests(force = false) {
   const res = await JFAuth.authFetch("/api/admin/requests");
   const requests = await res.json();
 
+  if (window.location.hash) {
+    expandedIds.add(window.location.hash.slice(1));
+  }
+
   const pendingListEl = document.getElementById("requests-list");
   const pastListEl = document.getElementById("past-requests-list");
   pendingListEl.innerHTML = "";
@@ -92,6 +114,7 @@ function buildRequestCard(req) {
   const node = template.content.cloneNode(true);
   const cardEl = node.querySelector(".request-card");
   cardEl.id = req.session_id;
+  applyCollapseBehavior(cardEl, req.session_id);
 
   node.querySelector(".req-name").textContent = req.candidate_name || "(sin nombre)";
   node.querySelector(".req-meta").textContent =

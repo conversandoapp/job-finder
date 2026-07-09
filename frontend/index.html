@@ -50,9 +50,34 @@
         <option>Otro</option>
       </select>
 
-      <button type="submit" class="btn" id="submit-btn">Analizar CV</button>
+      <button type="submit" class="btn" id="submit-btn">Continuar</button>
       <div id="error-box" class="error-box" style="display:none;"></div>
     </form>
+  </div>
+
+  <div id="roles-view" class="card" style="display:none;">
+    <h1>¿Te interesa algún puesto en particular?</h1>
+    <p class="subtitle" id="roles-subtitle">Aquí unas opciones:</p>
+
+    <label class="field-label" for="role-input-0">Puesto 1 (el más importante)</label>
+    <input type="text" id="role-input-0" class="role-input" placeholder="Ej. Product Manager" />
+
+    <label class="field-label" for="role-input-1">Puesto 2</label>
+    <input type="text" id="role-input-1" class="role-input" placeholder="Opcional" />
+
+    <label class="field-label" for="role-input-2">Puesto 3</label>
+    <input type="text" id="role-input-2" class="role-input" placeholder="Opcional" />
+
+    <label style="display:flex; align-items:center; gap:8px; margin:18px 0 6px; font-size:14px; cursor:pointer;">
+      <input type="checkbox" id="dejar-eleccion" style="width:auto;" />
+      Prefiero que ustedes elijan el puesto según mi CV
+    </label>
+
+    <div style="display:flex; gap:10px; margin-top:18px;">
+      <button type="button" class="btn secondary" id="roles-back-btn">Atrás</button>
+      <button type="button" class="btn" id="roles-submit-btn">Enviar CV</button>
+    </div>
+    <div id="roles-error-box" class="error-box" style="display:none;"></div>
   </div>
 
   <div id="loading-view" class="card loading-panel" style="display:none;">

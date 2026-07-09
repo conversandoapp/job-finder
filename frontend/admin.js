@@ -73,6 +73,9 @@ async function loadRequests(force = false) {
 
     const linksEl = node.querySelector(".req-links");
     let linksHtml = `<a href="#" class="download-original">📄 Descargar CV original</a>`;
+    if (req.cv_zip_path) {
+      linksHtml += ` <a href="#" class="download-zip">📦 Descargar CV + puestos (.zip)</a>`;
+    }
     if (req.cv_drive_link) {
       linksHtml += ` <a href="${req.cv_drive_link}" target="_blank">☁️ Ver en Drive</a>`;
     }
@@ -93,6 +96,23 @@ async function loadRequests(force = false) {
       ev.preventDefault();
       downloadOriginal(req.session_id);
     });
+    const zipLink = linksEl.querySelector(".download-zip");
+    if (zipLink) {
+      zipLink.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        downloadZip(req.session_id);
+      });
+    }
+
+    const rolesElegidosEl = node.querySelector(".req-roles-elegidos");
+    if (req.roles_modo === "candidato" && (req.roles_elegidos || []).length) {
+      const items = req.roles_elegidos.map((r, i) => `${i + 1}. ${r}`).join(" · ");
+      rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 <strong>Puestos elegidos por el candidato</strong> (prioridad): ${items}</p>`;
+    } else if (req.roles_modo === "admin") {
+      rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 El candidato prefiere que elijamos el puesto según su CV.</p>`;
+    } else {
+      rolesElegidosEl.innerHTML = "";
+    }
 
     const rolesWrap = node.querySelector(".req-roles-sugeridos");
     const rolesListEl = node.querySelector(".roles-sugeridos-list");
@@ -165,6 +185,28 @@ async function downloadOriginal(sessionId) {
     const disposition = res.headers.get("content-disposition") || "";
     const match = disposition.match(/filename="?([^"]+)"?/);
     const filename = match ? match[1] : "cv_original";
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function downloadZip(sessionId) {
+  try {
+    const res = await JFAuth.authFetch(`/api/admin/download/zip/${sessionId}`);
+    if (!res.ok) throw new Error("No se pudo descargar el paquete CV + puestos");
+    const blob = await res.blob();
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : "postulacion.zip";
 
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");

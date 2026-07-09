@@ -5,6 +5,15 @@ const form = document.getElementById("upload-form");
 const errorBox = document.getElementById("error-box");
 const submitBtn = document.getElementById("submit-btn");
 
+const formView = document.getElementById("form-view");
+const rolesView = document.getElementById("roles-view");
+const rolesSubtitle = document.getElementById("roles-subtitle");
+const roleInputs = [0, 1, 2].map((i) => document.getElementById(`role-input-${i}`));
+const dejarEleccionCheckbox = document.getElementById("dejar-eleccion");
+const rolesBackBtn = document.getElementById("roles-back-btn");
+const rolesSubmitBtn = document.getElementById("roles-submit-btn");
+const rolesErrorBox = document.getElementById("roles-error-box");
+
 async function init() {
   const session = await JFAuth.requireAuth();
   if (!session) return;
@@ -55,6 +64,14 @@ function updateFilenameLabel() {
   }
 }
 
+function setRoleInputsDisabled(disabled) {
+  roleInputs.forEach((input) => { input.disabled = disabled; });
+}
+
+dejarEleccionCheckbox.addEventListener("change", () => {
+  setRoleInputsDisabled(dejarEleccionCheckbox.checked);
+});
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   errorBox.style.display = "none";
@@ -66,12 +83,66 @@ form.addEventListener("submit", async (e) => {
   }
 
   submitBtn.disabled = true;
-  submitBtn.textContent = "Enviando...";
+  submitBtn.textContent = "Analizando...";
+
+  let rolesSugeridos = [];
+  try {
+    const fd = new FormData();
+    fd.append("file", fileInput.files[0]);
+    const res = await JFAuth.authFetch("/api/suggest-roles", { method: "POST", body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      rolesSugeridos = data.roles_sugeridos || [];
+    }
+  } catch (err) {
+    rolesSugeridos = []; // seguimos igual, con los 3 campos vacíos y editables
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Continuar";
+
+  roleInputs.forEach((input, i) => {
+    input.value = rolesSugeridos[i] ? rolesSugeridos[i].titulo : "";
+  });
+  rolesSubtitle.textContent = rolesSugeridos.length
+    ? "Aquí unas opciones:"
+    : "Puedes incluir hasta 3 puestos que te interesen:";
+  dejarEleccionCheckbox.checked = false;
+  setRoleInputsDisabled(false);
+  rolesErrorBox.style.display = "none";
+
+  formView.style.display = "none";
+  rolesView.style.display = "block";
+});
+
+rolesBackBtn.addEventListener("click", () => {
+  rolesView.style.display = "none";
+  formView.style.display = "block";
+});
+
+rolesSubmitBtn.addEventListener("click", async () => {
+  rolesErrorBox.style.display = "none";
+
+  const dejarEleccion = dejarEleccionCheckbox.checked;
+  const roles = dejarEleccion
+    ? []
+    : roleInputs.map((i) => i.value.trim()).filter((v) => v.length > 0);
+
+  if (!dejarEleccion && roles.length === 0) {
+    rolesErrorBox.textContent = "Ingresa al menos un puesto de tu interés, o marca la casilla para que elijamos nosotros.";
+    rolesErrorBox.style.display = "block";
+    return;
+  }
+
+  rolesSubmitBtn.disabled = true;
+  rolesSubmitBtn.textContent = "Enviando...";
 
   const fd = new FormData();
   fd.append("file", fileInput.files[0]);
   fd.append("linkedin_url", document.getElementById("linkedin_url").value);
   fd.append("pais", document.getElementById("pais").value);
+  fd.append("roles_candidato", JSON.stringify(roles));
+  fd.append("dejar_eleccion", dejarEleccion ? "true" : "false");
 
   try {
     const res = await JFAuth.authFetch("/api/analyze", { method: "POST", body: fd });
@@ -82,7 +153,7 @@ form.addEventListener("submit", async (e) => {
     const data = await res.json();
     const resultUrl = `${window.location.origin}/resultado.html?session=${data.session_id}`;
 
-    document.getElementById("form-view").style.display = "none";
+    rolesView.style.display = "none";
     document.getElementById("loading-view").style.display = "block";
     const link = document.getElementById("result-link");
     link.href = resultUrl;
@@ -90,9 +161,9 @@ form.addEventListener("submit", async (e) => {
 
     setTimeout(() => { window.location.href = resultUrl; }, 3500);
   } catch (err) {
-    errorBox.textContent = err.message;
-    errorBox.style.display = "block";
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Analizar CV";
+    rolesErrorBox.textContent = err.message;
+    rolesErrorBox.style.display = "block";
+    rolesSubmitBtn.disabled = false;
+    rolesSubmitBtn.textContent = "Enviar CV";
   }
 });

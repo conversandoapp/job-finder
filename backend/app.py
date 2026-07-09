@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from services import auth, db, drive_oauth, notifications, role_matcher, sessions, storage_drive
+from services import auth, db, drive_oauth, notifications, packaging, role_matcher, sessions, storage_drive
 
 load_dotenv()
 
@@ -74,16 +74,46 @@ async def whoami(user: dict = Depends(auth.get_current_user)):
 # Endpoints de usuario (requieren estar logueado)
 # ---------------------------------------------------------------------------
 
+@app.post("/api/suggest-roles")
+async def suggest_roles(file: UploadFile = File(...), user: dict = Depends(auth.get_current_user)):
+    """Filtro rápido (sin guardar nada) para sugerirle al candidato hasta 3
+    puestos que hacen match con su CV, antes de que confirme la subida."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_CV_EXTENSIONS:
+        raise HTTPException(400, f"Formato no soportado ({ext}). Usa PDF, DOCX o TXT.")
+
+    content = await file.read()
+    try:
+        roles_sugeridos = role_matcher.suggest_roles_from_cv(content, ext, top_n=3)
+    except Exception as e:  # noqa: BLE001
+        print(f"[suggest-roles] ERROR sugiriendo roles desde CV: {e}")
+        roles_sugeridos = []
+
+    return {"roles_sugeridos": roles_sugeridos}
+
+
 @app.post("/api/analyze")
 async def analyze(
     file: UploadFile = File(...),
     linkedin_url: str = Form(None),
     pais: str = Form("Peru"),
+    roles_candidato: str = Form("[]"),
+    dejar_eleccion: str = Form("false"),
     user: dict = Depends(auth.get_current_user),
 ):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_CV_EXTENSIONS:
         raise HTTPException(400, f"Formato no soportado ({ext}). Usa PDF, DOCX o TXT.")
+
+    dejar = dejar_eleccion.strip().lower() in ("true", "1", "yes")
+    try:
+        roles_parsed = json.loads(roles_candidato) if roles_candidato else []
+    except json.JSONDecodeError:
+        roles_parsed = []
+    roles_elegidos = [] if dejar else [
+        r.strip() for r in roles_parsed if isinstance(r, str) and r.strip()
+    ][:3]
+    roles_modo = "admin" if dejar else "candidato"
 
     candidate_name = Path(file.filename or "cv").stem
     session_id = sessions.create_session(
@@ -93,14 +123,32 @@ async def analyze(
     content = await file.read()
     original_path = f"{session_id}/cv_original{ext}"
     db.upload_file(original_path, content, file.content_type or "application/octet-stream")
-    sessions.update_session(session_id, cv_original_path=original_path)
+    sessions.update_session(
+        session_id,
+        cv_original_path=original_path,
+        roles_elegidos=roles_elegidos,
+        roles_modo=roles_modo,
+    )
 
     drive_link = storage_drive.upload_cv_to_drive(content, session_id, file.filename or "cv")
     if drive_link:
         sessions.update_session(session_id, cv_drive_link=drive_link)
 
+    zip_bytes = None
     try:
-        notifications.notify_cv_uploaded(session_id, candidate_name, pais, linkedin_url, drive_link)
+        zip_bytes = packaging.build_postulacion_zip(content, f"cv_original{ext}", roles_modo, roles_elegidos)
+        zip_path = f"{session_id}/postulacion.zip"
+        db.upload_file(zip_path, zip_bytes, "application/zip")
+        sessions.update_session(session_id, cv_zip_path=zip_path)
+    except Exception as e:  # noqa: BLE001
+        print(f"[analyze] ERROR empaquetando CV + puestos en zip: {e}")
+
+    try:
+        attachment = (zip_bytes, f"postulacion_{session_id[:8]}.zip") if zip_bytes else None
+        notifications.notify_cv_uploaded(
+            session_id, candidate_name, pais, linkedin_url, drive_link,
+            roles_modo=roles_modo, roles_elegidos=roles_elegidos, attachment=attachment,
+        )
     except Exception as e:  # noqa: BLE001
         print(f"[analyze] ERROR notificando CV subido: {e}")
 
@@ -226,6 +274,25 @@ async def admin_download_original(session_id: str, user: dict = Depends(auth.req
     return Response(
         content,
         media_type="application/octet-stream",
+        headers={"content-disposition": f'attachment; filename="{Path(path).name}"'},
+    )
+
+
+@app.get("/api/admin/download/zip/{session_id}")
+async def admin_download_zip(session_id: str, user: dict = Depends(auth.require_admin)):
+    """CV original + puestos_candidato.json comprimidos (ver services/packaging.py)."""
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    path = data.get("cv_zip_path")
+    if not path:
+        raise HTTPException(404, "No se encontró el paquete CV + puestos")
+
+    content = db.download_file(path)
+    return Response(
+        content,
+        media_type="application/zip",
         headers={"content-disposition": f'attachment; filename="{Path(path).name}"'},
     )
 

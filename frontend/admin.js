@@ -11,6 +11,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("tab-requests").style.display = btn.dataset.tab === "requests" ? "block" : "none";
+    document.getElementById("tab-past").style.display = btn.dataset.tab === "past" ? "block" : "none";
     document.getElementById("tab-notifications").style.display = btn.dataset.tab === "notifications" ? "block" : "none";
     if (btn.dataset.tab === "notifications") loadNotifications();
   });
@@ -28,19 +29,28 @@ function statusPill(status) {
 }
 
 function hasUnsavedInput() {
-  const listEl = document.getElementById("requests-list");
-  const fields = listEl.querySelectorAll(".cv-upload-form input, .cv-upload-form textarea, .vacantes-upload-form input");
-  for (const el of fields) {
-    if (el.type === "file") {
-      if (el.files && el.files.length) return true;
-    } else if (el.value && el.value.trim() !== "") {
+  const listEls = [document.getElementById("requests-list"), document.getElementById("past-requests-list")];
+  const active = document.activeElement;
+  for (const listEl of listEls) {
+    const fields = listEl.querySelectorAll(".cv-upload-form input, .cv-upload-form textarea, .vacantes-upload-form input");
+    for (const el of fields) {
+      if (el.type === "file") {
+        if (el.files && el.files.length) return true;
+      } else if (el.value && el.value.trim() !== "") {
+        return true;
+      }
+    }
+    // También pausamos si el foco está en algún campo (por si el navegador
+    // no reporta el value todavía, ej. justo al empezar a tipear).
+    if (active && listEl.contains(active) && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
       return true;
     }
   }
-  // También pausamos si el foco está en algún campo (por si el navegador
-  // no reporta el value todavía, ej. justo al empezar a tipear).
-  const active = document.activeElement;
-  return !!(active && listEl.contains(active) && (active.tagName === "INPUT" || active.tagName === "TEXTAREA"));
+  return false;
+}
+
+function isCompletedRequest(req) {
+  return req.cv_status === "ready" && req.jobs_status === "ready";
 }
 
 async function loadRequests(force = false) {
@@ -49,127 +59,139 @@ async function loadRequests(force = false) {
   }
   const res = await JFAuth.authFetch("/api/admin/requests");
   const requests = await res.json();
-  const listEl = document.getElementById("requests-list");
-  listEl.innerHTML = "";
 
-  if (!requests.length) {
-    listEl.innerHTML = "<div class='card'>Todavía no hay solicitudes. Cuando alguien suba un CV aparecerá aquí.</div>";
-    return;
+  const pendingListEl = document.getElementById("requests-list");
+  const pastListEl = document.getElementById("past-requests-list");
+  pendingListEl.innerHTML = "";
+  pastListEl.innerHTML = "";
+
+  const pending = requests.filter(req => !isCompletedRequest(req));
+  const past = requests.filter(isCompletedRequest);
+
+  if (!pending.length) {
+    pendingListEl.innerHTML = "<div class='card'>No hay solicitudes pendientes. Cuando alguien suba un CV o pida vacantes aparecerá aquí.</div>";
+  } else {
+    pending.forEach(req => pendingListEl.appendChild(buildRequestCard(req)));
   }
 
-  const template = document.getElementById("request-card-template");
-
-  requests.forEach(req => {
-    const node = template.content.cloneNode(true);
-    const cardEl = node.querySelector(".request-card");
-    cardEl.id = req.session_id;
-
-    node.querySelector(".req-name").textContent = req.candidate_name || "(sin nombre)";
-    node.querySelector(".req-meta").textContent =
-      `${req.session_id} · ${req.pais || ""} · creado ${formatDate(req.created_at)}`;
-
-    node.querySelector(".req-status-pills").innerHTML =
-      `CV: ${statusPill(req.cv_status)}  Vacantes: ${statusPill(req.jobs_status)}`;
-
-    const linksEl = node.querySelector(".req-links");
-    let linksHtml = `<a href="#" class="download-original">📄 Descargar CV original</a>`;
-    if (req.cv_zip_path) {
-      linksHtml += ` <a href="#" class="download-zip">📦 Descargar CV + puestos (.zip)</a>`;
-    }
-    if (req.cv_drive_link) {
-      linksHtml += ` <a href="${req.cv_drive_link}" target="_blank">☁️ Ver en Drive</a>`;
-    }
-    if (req.linkedin_url) {
-      linksHtml += ` <a href="${req.linkedin_url}" target="_blank">🔗 LinkedIn del candidato</a>`;
-    }
-    if (req.user_email) {
-      linksHtml += ` <span style="color:#5b6b76;">👤 ${req.user_email}</span>`;
-    }
-    if (req.cv_status === "ready") {
-      linksHtml += ` <a href="/resultado.html?session=${req.session_id}" target="_blank">👁️ Ver análisis de CV</a>`;
-    }
-    if (req.jobs_status === "ready") {
-      linksHtml += ` <a href="/vacantes.html?session=${req.session_id}" target="_blank">👁️ Ver vacantes</a>`;
-    }
-    linksEl.innerHTML = linksHtml;
-    linksEl.querySelector(".download-original").addEventListener("click", (ev) => {
-      ev.preventDefault();
-      downloadOriginal(req.session_id);
-    });
-    const zipLink = linksEl.querySelector(".download-zip");
-    if (zipLink) {
-      zipLink.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        downloadZip(req.session_id);
-      });
-    }
-
-    const rolesElegidosEl = node.querySelector(".req-roles-elegidos");
-    if (req.roles_modo === "candidato" && (req.roles_elegidos || []).length) {
-      const items = req.roles_elegidos.map((r, i) => `${i + 1}. ${r}`).join(" · ");
-      rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 <strong>Puestos elegidos por el candidato</strong> (prioridad): ${items}</p>`;
-    } else if (req.roles_modo === "admin") {
-      rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 El candidato prefiere que elijamos el puesto según su CV.</p>`;
-    } else {
-      rolesElegidosEl.innerHTML = "";
-    }
-
-    const rolesWrap = node.querySelector(".req-roles-sugeridos");
-    const rolesListEl = node.querySelector(".roles-sugeridos-list");
-    const rolesSugeridos = req.roles_sugeridos || [];
-    if (!rolesSugeridos.length) {
-      rolesWrap.style.display = "none";
-    } else {
-      rolesSugeridos.forEach(r => {
-        const div = document.createElement("div");
-        div.className = "role-card";
-        const kws = (r.keywords_encontrados || []).join(", ");
-        div.innerHTML = `
-          <div>
-            <div class="title">${r.titulo}</div>
-            ${kws ? `<div class="just">Coincidencias: ${kws}</div>` : ""}
-          </div>
-          <span class="badge blue">${r.match_porcentaje}% match</span>
-        `;
-        rolesListEl.appendChild(div);
-      });
-    }
-
-    const cvFormWrap = node.querySelector(".req-cv-form");
-    const cvForm = node.querySelector(".cv-upload-form");
-    const deleteCvBtn = node.querySelector(".btn-delete-cv");
-    if (req.cv_status === "ready") {
-      cvFormWrap.classList.add("done");
-      cvForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
-      deleteCvBtn.style.display = "";
-    }
-    cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, req.cv_status === "ready"));
-    deleteCvBtn.addEventListener("click", () => handleDeleteCv(req.session_id));
-
-    const vacFormWrap = node.querySelector(".req-vacantes-form");
-    const vacForm = node.querySelector(".vacantes-upload-form");
-    const deleteVacantesBtn = node.querySelector(".btn-delete-vacantes");
-    if (req.jobs_status === "not_requested") {
-      const notice = document.createElement("p");
-      notice.className = "subtitle";
-      notice.style.marginBottom = "8px";
-      notice.textContent = "El usuario todavía no pidió buscar vacantes — puedes subirlo igual si quieres adelantarlo o probar cómo se ve.";
-      vacFormWrap.insertBefore(notice, vacForm);
-    } else if (req.jobs_status === "ready") {
-      vacFormWrap.classList.add("done");
-      vacForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
-      deleteVacantesBtn.style.display = "";
-    }
-    vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id, req.jobs_status === "ready"));
-    deleteVacantesBtn.addEventListener("click", () => handleDeleteVacantes(req.session_id));
-
-    listEl.appendChild(node);
-  });
+  if (!past.length) {
+    pastListEl.innerHTML = "<div class='card'>Todavía no hay solicitudes completadas.</div>";
+  } else {
+    past.forEach(req => pastListEl.appendChild(buildRequestCard(req)));
+  }
 
   if (window.location.hash) {
     const target = document.getElementById(window.location.hash.slice(1));
     if (target) target.scrollIntoView({ behavior: "smooth" });
   }
+}
+
+function buildRequestCard(req) {
+  const template = document.getElementById("request-card-template");
+  const node = template.content.cloneNode(true);
+  const cardEl = node.querySelector(".request-card");
+  cardEl.id = req.session_id;
+
+  node.querySelector(".req-name").textContent = req.candidate_name || "(sin nombre)";
+  node.querySelector(".req-meta").textContent =
+    `${req.session_id} · ${req.pais || ""} · creado ${formatDate(req.created_at)}`;
+
+  node.querySelector(".req-status-pills").innerHTML =
+    `CV: ${statusPill(req.cv_status)}  Vacantes: ${statusPill(req.jobs_status)}`;
+
+  const linksEl = node.querySelector(".req-links");
+  let linksHtml = `<a href="#" class="download-original">📄 Descargar CV original</a>`;
+  if (req.cv_zip_path) {
+    linksHtml += ` <a href="#" class="download-zip">📦 Descargar CV + puestos (.zip)</a>`;
+  }
+  if (req.cv_drive_link) {
+    linksHtml += ` <a href="${req.cv_drive_link}" target="_blank">☁️ Ver en Drive</a>`;
+  }
+  if (req.linkedin_url) {
+    linksHtml += ` <a href="${req.linkedin_url}" target="_blank">🔗 LinkedIn del candidato</a>`;
+  }
+  if (req.user_email) {
+    linksHtml += ` <span style="color:#5b6b76;">👤 ${req.user_email}</span>`;
+  }
+  if (req.cv_status === "ready") {
+    linksHtml += ` <a href="/resultado.html?session=${req.session_id}" target="_blank">👁️ Ver análisis de CV</a>`;
+  }
+  if (req.jobs_status === "ready") {
+    linksHtml += ` <a href="/vacantes.html?session=${req.session_id}" target="_blank">👁️ Ver vacantes</a>`;
+  }
+  linksEl.innerHTML = linksHtml;
+  linksEl.querySelector(".download-original").addEventListener("click", (ev) => {
+    ev.preventDefault();
+    downloadOriginal(req.session_id);
+  });
+  const zipLink = linksEl.querySelector(".download-zip");
+  if (zipLink) {
+    zipLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      downloadZip(req.session_id);
+    });
+  }
+
+  const rolesElegidosEl = node.querySelector(".req-roles-elegidos");
+  if (req.roles_modo === "candidato" && (req.roles_elegidos || []).length) {
+    const items = req.roles_elegidos.map((r, i) => `${i + 1}. ${r}`).join(" · ");
+    rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 <strong>Puestos elegidos por el candidato</strong> (prioridad): ${items}</p>`;
+  } else if (req.roles_modo === "admin") {
+    rolesElegidosEl.innerHTML = `<p class="subtitle" style="margin:0 0 10px;">🎯 El candidato prefiere que elijamos el puesto según su CV.</p>`;
+  } else {
+    rolesElegidosEl.innerHTML = "";
+  }
+
+  const rolesWrap = node.querySelector(".req-roles-sugeridos");
+  const rolesListEl = node.querySelector(".roles-sugeridos-list");
+  const rolesSugeridos = req.roles_sugeridos || [];
+  if (!rolesSugeridos.length) {
+    rolesWrap.style.display = "none";
+  } else {
+    rolesSugeridos.forEach(r => {
+      const div = document.createElement("div");
+      div.className = "role-card";
+      const kws = (r.keywords_encontrados || []).join(", ");
+      div.innerHTML = `
+        <div>
+          <div class="title">${r.titulo}</div>
+          ${kws ? `<div class="just">Coincidencias: ${kws}</div>` : ""}
+        </div>
+        <span class="badge blue">${r.match_porcentaje}% match</span>
+      `;
+      rolesListEl.appendChild(div);
+    });
+  }
+
+  const cvFormWrap = node.querySelector(".req-cv-form");
+  const cvForm = node.querySelector(".cv-upload-form");
+  const deleteCvBtn = node.querySelector(".btn-delete-cv");
+  if (req.cv_status === "ready") {
+    cvFormWrap.classList.add("done");
+    cvForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
+    deleteCvBtn.style.display = "";
+  }
+  cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, req.cv_status === "ready"));
+  deleteCvBtn.addEventListener("click", () => handleDeleteCv(req.session_id));
+
+  const vacFormWrap = node.querySelector(".req-vacantes-form");
+  const vacForm = node.querySelector(".vacantes-upload-form");
+  const deleteVacantesBtn = node.querySelector(".btn-delete-vacantes");
+  if (req.jobs_status === "not_requested") {
+    const notice = document.createElement("p");
+    notice.className = "subtitle";
+    notice.style.marginBottom = "8px";
+    notice.textContent = "El usuario todavía no pidió buscar vacantes — puedes subirlo igual si quieres adelantarlo o probar cómo se ve.";
+    vacFormWrap.insertBefore(notice, vacForm);
+  } else if (req.jobs_status === "ready") {
+    vacFormWrap.classList.add("done");
+    vacForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
+    deleteVacantesBtn.style.display = "";
+  }
+  vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id, req.jobs_status === "ready"));
+  deleteVacantesBtn.addEventListener("click", () => handleDeleteVacantes(req.session_id));
+
+  return node;
 }
 
 function formatDate(iso) {
@@ -328,6 +350,7 @@ async function loadNotifications() {
 }
 
 document.getElementById("refresh-btn").addEventListener("click", () => loadRequests(true));
+document.getElementById("refresh-past-btn").addEventListener("click", () => loadRequests(true));
 
 document.getElementById("connect-drive-btn").addEventListener("click", async () => {
   try {

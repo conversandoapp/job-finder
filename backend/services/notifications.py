@@ -22,6 +22,8 @@ Para activar el modo real solo hace falta:
 import os
 import smtplib
 from datetime import datetime, timezone
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from services import db
@@ -49,9 +51,10 @@ def read_notifications(limit: int = 50) -> list[dict]:
     return [{"ts": r["created_at"], "subject": r["subject"], "body": r["body"]} for r in res.data]
 
 
-def send_notification(subject: str, body: str) -> dict:
+def send_notification(subject: str, body: str, attachment: tuple[bytes, str] | None = None) -> dict:
     """Envía (o simula) una notificación al admin. Nunca lanza excepción hacia
-    el flujo principal: si falla el email real, cae de vuelta al log local."""
+    el flujo principal: si falla el email real, cae de vuelta al log local.
+    attachment, si se pasa, es (contenido_bytes, nombre_de_archivo)."""
     enabled = os.getenv("NOTIFY_EMAIL_ENABLED", "false").lower() == "true"
     result = {"mode": "simulated", "sent": False, "error": None}
 
@@ -61,7 +64,15 @@ def send_notification(subject: str, body: str) -> dict:
             to_addr = os.getenv("NOTIFY_EMAIL_TO", "conversandoapp@gmail.com")
             app_password = os.getenv("NOTIFY_EMAIL_APP_PASSWORD", "")
 
-            msg = MIMEText(body, "plain", "utf-8")
+            if attachment:
+                attachment_content, attachment_filename = attachment
+                msg = MIMEMultipart()
+                msg.attach(MIMEText(body, "plain", "utf-8"))
+                part = MIMEApplication(attachment_content, Name=attachment_filename)
+                part["Content-Disposition"] = f'attachment; filename="{attachment_filename}"'
+                msg.attach(part)
+            else:
+                msg = MIMEText(body, "plain", "utf-8")
             msg["Subject"] = subject
             msg["From"] = from_addr
             msg["To"] = to_addr
@@ -83,8 +94,24 @@ def send_notification(subject: str, body: str) -> dict:
 
 
 def notify_cv_uploaded(session_id: str, candidate_name: str | None, pais: str,
-                        linkedin_url: str | None, drive_link: str | None) -> dict:
+                        linkedin_url: str | None, drive_link: str | None,
+                        roles_modo: str | None = None, roles_elegidos: list[str] | None = None,
+                        attachment: tuple[bytes, str] | None = None) -> dict:
     subject = f"[Job Finder] Nuevo CV subido — sesión {session_id[:8]}"
+
+    if roles_modo == "candidato" and roles_elegidos:
+        roles_lines = "\n".join(f"  {i + 1}. {r}" for i, r in enumerate(roles_elegidos))
+        roles_text = f"Puestos de interés del candidato (orden de prioridad):\n{roles_lines}\n\n"
+    else:
+        roles_text = "El candidato prefiere que nosotros elijamos el puesto según su CV.\n\n"
+
+    attachment_note = (
+        "Adjunto el CV + un JSON con los puestos elegidos, comprimidos en un .zip.\n\n"
+        if attachment else
+        "También puedes descargar el CV + un JSON con los puestos elegidos (comprimidos en "
+        "un .zip) desde el panel admin.\n\n"
+    )
+
     body = (
         f"Se subió un nuevo CV para optimizar.\n\n"
         f"Session ID: {session_id}\n"
@@ -92,10 +119,12 @@ def notify_cv_uploaded(session_id: str, candidate_name: str | None, pais: str,
         f"País: {pais}\n"
         f"LinkedIn: {linkedin_url or '(no provisto)'}\n"
         f"CV en Drive: {drive_link or '(no disponible, descargalo desde el panel admin)'}\n\n"
+        f"{roles_text}"
+        f"{attachment_note}"
         f"Entra al panel admin para subir el CV optimizado cuando esté listo:\n"
         f"{_base_url()}/admin#{session_id}\n"
     )
-    return send_notification(subject, body)
+    return send_notification(subject, body, attachment=attachment)
 
 
 def notify_jobs_requested(session_id: str, candidate_name: str | None, pais: str) -> dict:

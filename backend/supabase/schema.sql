@@ -35,9 +35,17 @@ create table if not exists sessions (
   -- generado sin intervención humana en /api/analyze). No reemplaza el
   -- análisis del admin en cv_scores.roles_objetivo.
   roles_sugeridos   jsonb,
+  -- Puestos que el propio candidato eligió al subir su CV (orden de
+  -- prioridad, el primero es el más importante). roles_modo = 'admin'
+  -- significa que el candidato prefirió que nosotros elijamos por él.
+  roles_elegidos    jsonb,
+  roles_modo        text
+                      check (roles_modo in ('candidato', 'admin')),
   -- Key exacta del objeto en el bucket "cv-files" de Supabase Storage.
   cv_original_path    text,
-  cv_optimizado_path  text
+  cv_optimizado_path  text,
+  -- .zip con el CV original + puestos_candidato.json, para el admin.
+  cv_zip_path          text
 );
 
 create index if not exists sessions_user_id_idx on sessions (user_id);
@@ -66,3 +74,7 @@ create table if not exists app_settings (
 -- Cambios incrementales aplicados a mano sobre una DB ya existente (el
 -- "create table if not exists" de arriba no los aplica solo):
 --   alter table sessions add column if not exists roles_sugeridos jsonb;
+--   alter table sessions add column if not exists roles_elegidos jsonb;
+--   alter table sessions add column if not exists roles_modo text
+--     check (roles_modo in ('candidato', 'admin'));
+--   alter table sessions add column if not exists cv_zip_path text;

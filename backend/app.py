@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from services import auth, db, drive_oauth, notifications, sessions, storage_drive
+from services import auth, db, drive_oauth, notifications, role_matcher, sessions, storage_drive
 
 load_dotenv()
 
@@ -103,6 +103,12 @@ async def analyze(
         notifications.notify_cv_uploaded(session_id, candidate_name, pais, linkedin_url, drive_link)
     except Exception as e:  # noqa: BLE001
         print(f"[analyze] ERROR notificando CV subido: {e}")
+
+    try:
+        roles_sugeridos = role_matcher.suggest_roles_from_cv(content, ext)
+        sessions.update_session(session_id, roles_sugeridos=roles_sugeridos)
+    except Exception as e:  # noqa: BLE001
+        print(f"[analyze] ERROR sugiriendo roles desde CV: {e}")
 
     return {"session_id": session_id, "status": "processing"}
 

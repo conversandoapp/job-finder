@@ -310,6 +310,7 @@ ul.plain li:last-child { border-bottom: none; }
   font-weight: 650;
 }
 .pill-status.pending { background: var(--orange-light); color: var(--orange); }
+.pill-status.pending_review { background: var(--blue-light); color: var(--blue-600); }
 .pill-status.ready { background: var(--green-light); color: var(--green); }
 .pill-status.error { background: var(--red-light); color: var(--red); }
 .pill-status.not_requested { background: var(--gray-bg); color: var(--text-muted); border: 1px solid var(--gray-border); }

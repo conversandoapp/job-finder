@@ -19,6 +19,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 
 const STATUS_LABEL = {
   pending: "⏳ Pendiente",
+  pending_review: "🕵️ En revisión",
   ready: "✅ Listo",
   error: "❌ Error",
   not_requested: "— No pedido",
@@ -166,12 +167,27 @@ function buildRequestCard(req) {
   const cvFormWrap = node.querySelector(".req-cv-form");
   const cvForm = node.querySelector(".cv-upload-form");
   const deleteCvBtn = node.querySelector(".btn-delete-cv");
-  if (req.cv_status === "ready") {
+  if (req.cv_status === "pending_review") {
+    const notice = document.createElement("p");
+    notice.className = "subtitle";
+    notice.style.marginBottom = "8px";
+    notice.textContent = "✅ Enviado — esperando aprobación de backoffice.";
+    cvFormWrap.insertBefore(notice, cvForm);
+  } else if (req.cv_review_note) {
+    const notice = document.createElement("p");
+    notice.className = "subtitle";
+    notice.style.marginBottom = "8px";
+    notice.style.color = "#b8511a";
+    notice.textContent = `⚠️ Rechazado por backoffice: ${req.cv_review_note}`;
+    cvFormWrap.insertBefore(notice, cvForm);
+  }
+  if (req.cv_status === "ready" || req.cv_status === "pending_review") {
     cvFormWrap.classList.add("done");
     cvForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
     deleteCvBtn.style.display = "";
   }
-  cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, req.cv_status === "ready"));
+  const cvIsReplace = req.cv_status === "ready" || req.cv_status === "pending_review";
+  cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, cvIsReplace));
   deleteCvBtn.addEventListener("click", () => handleDeleteCv(req.session_id));
 
   const vacFormWrap = node.querySelector(".req-vacantes-form");
@@ -183,12 +199,27 @@ function buildRequestCard(req) {
     notice.style.marginBottom = "8px";
     notice.textContent = "El usuario todavía no pidió buscar vacantes — puedes subirlo igual si quieres adelantarlo o probar cómo se ve.";
     vacFormWrap.insertBefore(notice, vacForm);
-  } else if (req.jobs_status === "ready") {
+  } else if (req.jobs_status === "pending_review") {
+    const notice = document.createElement("p");
+    notice.className = "subtitle";
+    notice.style.marginBottom = "8px";
+    notice.textContent = "✅ Enviado — esperando aprobación de backoffice.";
+    vacFormWrap.insertBefore(notice, vacForm);
+  } else if (req.jobs_review_note) {
+    const notice = document.createElement("p");
+    notice.className = "subtitle";
+    notice.style.marginBottom = "8px";
+    notice.style.color = "#b8511a";
+    notice.textContent = `⚠️ Rechazado por backoffice: ${req.jobs_review_note}`;
+    vacFormWrap.insertBefore(notice, vacForm);
+  }
+  if (req.jobs_status === "ready" || req.jobs_status === "pending_review") {
     vacFormWrap.classList.add("done");
     vacForm.querySelector("button[type=submit]").textContent = "Ya subido — volver a subir";
     deleteVacantesBtn.style.display = "";
   }
-  vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id, req.jobs_status === "ready"));
+  const vacIsReplace = req.jobs_status === "ready" || req.jobs_status === "pending_review";
+  vacForm.addEventListener("submit", (e) => handleVacantesUpload(e, req.session_id, vacIsReplace));
   deleteVacantesBtn.addEventListener("click", () => handleDeleteVacantes(req.session_id));
 
   return node;

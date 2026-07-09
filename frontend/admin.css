@@ -16,6 +16,10 @@
 .form-msg.ok { color: var(--green); }
 .form-msg.err { color: var(--red); }
 
+.review-block { border-top: 1px solid var(--gray-border); margin-top: 16px; padding-top: 14px; }
+.review-block h3 { font-size: 14px; margin: 0 0 10px; }
+.review-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
 .notif-item {
   background: white; border: 1px solid var(--gray-border); border-radius: var(--radius-sm);
   padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow-xs);

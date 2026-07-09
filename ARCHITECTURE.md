@@ -71,10 +71,12 @@ job-finder/
     ├── auth.js / auth.css       — cliente Supabase compartido, guards de sesión
     ├── login.html / login.js    — signup + login de usuarios normales
     ├── admin-login.html/.js     — login exclusivo de la cuenta admin
+    ├── backoffice-login.html/.js — login exclusivo de cuentas backoffice
     ├── index.html / app.js      — subir CV + ver solicitudes anteriores
     ├── resultado.html/.js       — ver análisis ATS + pedir vacantes
     ├── vacantes.html/.js/.css   — plataforma de vacantes (data-driven)
     ├── admin.html / admin.js    — panel admin
+    ├── backoffice.html / backoffice.js — panel backoffice (revisa antes de que el candidato vea el CV/vacantes)
     └── styles.css               — tokens de diseño compartidos (color, tipografía, sombras)
 ```
 
@@ -94,14 +96,15 @@ carpeta + `request.json` en el filesystem local.
 | Columna | Qué es |
 |---|---|
 | `session_id` (PK, uuid) | identifica la solicitud en todas las URLs (`?session=...`) |
-| `user_id`, `user_email` | dueño de la sesión (para `ensure_owner_or_admin`) |
+| `user_id`, `user_email` | dueño de la sesión (para `ensure_owner_or_backoffice`) |
 | `candidate_name`, `pais`, `linkedin_url` | datos del formulario inicial |
-| `cv_status` | `pending` \| `ready` \| `error` |
-| `jobs_status` | `not_requested` \| `pending` \| `ready` \| `error` |
+| `cv_status` | `pending` \| `pending_review` \| `ready` \| `error` |
+| `jobs_status` | `not_requested` \| `pending` \| `pending_review` \| `ready` \| `error` |
 | `cv_original_path`, `cv_optimizado_path` | keys de objetos en el bucket `cv-files` |
 | `cv_drive_link` | link de Drive del CV original (si `DRIVE_ENABLED=true`) |
 | `cv_scores` (jsonb) | el `cv_analysis.json` que sube el admin — lo lee `resultado.js` |
 | `vacantes` (jsonb) | el `vacantes.json` que sube el admin — lo lee `vacantes.js` |
+| `cv_review_note`, `jobs_review_note` | nota opcional que deja backoffice al rechazar (se limpia al reintentar/aprobar) |
 | `cv_requested_at/ready_at`, `jobs_requested_at/ready_at` | timestamps del flujo |
 
 ### Tabla `notifications`
@@ -127,29 +130,37 @@ nunca una URL pública directa).
 | Endpoint | Quién | Qué hace |
 |---|---|---|
 | `GET /api/config` | público | expone `SUPABASE_URL`/`SUPABASE_ANON_KEY` al frontend |
-| `GET /api/whoami` | usuario logueado | `{id, email, is_admin}` |
+| `GET /api/whoami` | usuario logueado | `{id, email, is_admin, is_backoffice}` |
 | `POST /api/analyze` | usuario | crea la sesión, sube el CV original a Storage (+ Drive opcional), notifica al admin |
+| `POST /api/suggest-roles` | usuario | filtro rápido de puestos sugeridos, sin persistir nada |
 | `GET /api/my-sessions` | usuario | lista sus propias sesiones |
-| `GET /api/status/{id}` | dueño o admin | estado crudo de la sesión |
-| `GET /api/result/{id}` | dueño o admin | `cv_scores` una vez `cv_status=ready` |
-| `GET /api/download/cv/{id}` | dueño o admin | descarga el CV optimizado desde Storage |
-| `POST /api/jobs` | dueño o admin | marca `jobs_status=pending`, notifica al admin |
-| `GET /api/vacantes/{id}` | dueño o admin | el JSON de vacantes una vez `jobs_status=ready` |
+| `GET /api/status/{id}` | dueño o backoffice | estado crudo de la sesión |
+| `GET /api/result/{id}` | dueño o backoffice | `cv_scores` una vez `cv_status=ready` (o en `pending_review`, para que backoffice previsualice) |
+| `GET /api/download/cv/{id}` | dueño o backoffice | descarga el CV optimizado desde Storage |
+| `POST /api/jobs` | dueño o admin | marca `jobs_status=pending`, notifica al admin (backoffice no puede disparar esta acción) |
+| `GET /api/vacantes/{id}` | dueño o backoffice | el JSON de vacantes una vez `jobs_status=ready` (o en `pending_review`, para previsualizar) |
 | `GET /api/admin/requests` | admin | todas las sesiones (para `/admin`) |
 | `GET /api/admin/notifications` | admin | historial de avisos |
 | `GET /api/admin/download/original/{id}` | admin | descarga el CV original |
 | `GET /api/admin/drive/authorize` | admin | arma la URL de consentimiento de Google (ver sección 7) |
 | `GET /api/admin/drive/oauth2callback` | Google (redirect) | intercambia el `code`, guarda el token |
-| `POST /api/admin/{id}/cv` | admin | sube CV optimizado + `cv_analysis.json`, marca `cv_status=ready` |
-| `POST /api/admin/{id}/vacantes` | admin | sube `vacantes.json`, marca `jobs_status=ready` |
+| `POST /api/admin/{id}/cv` | admin | sube CV optimizado + `cv_analysis.json`, marca `cv_status=pending_review` (espera aprobación de backoffice) |
+| `POST /api/admin/{id}/vacantes` | admin | sube `vacantes.json`, marca `jobs_status=pending_review` |
+| `GET /api/backoffice/requests` | backoffice | todas las sesiones (para `/backoffice`) |
+| `POST /api/backoffice/{id}/cv/approve` \| `/reject` \| `/replace` | backoffice | aprueba (`cv_status=ready`), rechaza (vuelve a `pending`, nota opcional) o reemplaza (sube su propio archivo y aprueba) el CV pendiente de revisión |
+| `POST /api/backoffice/{id}/vacantes/approve` \| `/reject` \| `/replace` | backoffice | análogo para `vacantes.json` |
 | `/` (StaticFiles) | público | sirve todo `frontend/` |
 
 ### Servicios (`backend/services/`)
 - **`auth.py`** — verifica el JWT de Supabase contra las JWKS del proyecto
   (asimétrico ES256/RS256, con fallback legacy HS256 vía
-  `SUPABASE_JWT_SECRET`). El admin es **un solo email** (`ADMIN_EMAIL`), no
-  un rol en base de datos. Expone `get_current_user`, `require_admin`,
-  `ensure_owner_or_admin` como dependencias de FastAPI.
+  `SUPABASE_JWT_SECRET`). El admin es **un solo email** (`ADMIN_EMAIL`) y
+  backoffice es una **lista de emails** (`BACKOFFICE_EMAILS`), ninguno un rol
+  en base de datos — `is_backoffice(user) = is_admin(user) OR email in
+  BACKOFFICE_EMAILS` (el admin siempre incluye permisos de backoffice).
+  Expone `get_current_user`, `require_admin`, `require_backoffice`,
+  `ensure_owner_or_admin`, `ensure_owner_or_backoffice` como dependencias de
+  FastAPI.
 - **`sessions.py`** — CRUD de la tabla `sessions` vía `db.py`.
 - **`notifications.py`** — envía email real por Gmail SMTP si
   `NOTIFY_EMAIL_ENABLED=true`, y **siempre** además inserta en la tabla
@@ -172,17 +183,19 @@ nunca una URL pública directa).
 ## 6. Frontend — una página por vista, sin build step
 
 Todas cargan `@supabase/supabase-js` por CDN + `auth.js` (cliente Supabase
-compartido, con `requireAuth`/`requireAdmin`/`authFetch`/`renderUserBar`) +
-su propio `.js`.
+compartido, con `requireAuth`/`requireAdmin`/`requireBackoffice`/`authFetch`/
+`renderUserBar`) + su propio `.js`.
 
 | Página | JS | Qué muestra |
 |---|---|---|
 | `index.html` | `app.js` | form de subida de CV (dropzone) + solicitudes anteriores |
-| `resultado.html` | `resultado.js` | polling de `cv_status`; scores ATS, keywords, debilidades, roles, botón de descarga, CTA "buscar vacantes" |
+| `resultado.html` | `resultado.js` | polling de `cv_status`; scores ATS, keywords, debilidades, roles, botón de descarga, CTA "buscar vacantes" (si es backoffice previsualizando un `pending_review`, muestra un banner y oculta la CTA) |
 | `vacantes.html` | `vacantes.js` | polling de `jobs_status`; plataforma data-driven (sidebar por categoría, stats, top 5, cards, filtros) |
 | `login.html` | `login.js` | signup/login de candidatos (split-screen con panel de marca) |
 | `admin-login.html` | `admin-login.js` | login exclusivo del admin |
-| `admin.html` | `admin.js` | lista de solicitudes, formularios de subida, notificaciones, botón "Conectar Google Drive" |
+| `backoffice-login.html` | `backoffice-login.js` | login exclusivo de cuentas backoffice |
+| `admin.html` | `admin.js` | solicitudes pendientes/pasadas, formularios de subida, notificaciones, botón "Conectar Google Drive" |
+| `backoffice.html` | `backoffice.js` | "Por revisar" (aprobar/rechazar/reemplazar CV y vacantes en `pending_review`) + "Todas las solicitudes" (solo lectura) |
 
 `styles.css` centraliza los tokens de diseño (paleta de azules, sombras,
 tipografía Inter) — `vacantes.css`/`admin.css`/`auth.css` los reutilizan via
@@ -257,9 +270,17 @@ filesystem local de una sola instancia.
   diseño original guardaba todo en archivos locales (más simple para un
   MVP de una persona). Se migró a Supabase Postgres/Storage cuando se
   detectó que Render no persiste el filesystem entre despliegues.
-- **El admin es un email, no un rol:** alcanza para un MVP de una sola
-  persona administrando; si en el futuro hay más de un admin, conviene una
-  tabla de roles.
+- **El admin y el backoffice son listas de emails, no una tabla de roles:**
+  alcanza para el volumen de personas administrando/revisando hoy; si crece
+  mucho o hacen falta permisos más finos, conviene migrar a una tabla de
+  roles en Supabase.
+- **Backoffice como paso de aprobación, no como reemplazo del admin:** el
+  admin sigue siendo el único que puede *iniciar* una carga de CV
+  optimizado/vacantes (`POST /api/admin/*`); backoffice solo puede actuar
+  sobre lo que ya está en `pending_review` (aprobar/rechazar/reemplazar).
+  Por la jerarquía de permisos, el propio admin también puede aprobar sus
+  propias cargas si no hay otra cuenta de backoffice — es una elección
+  consciente para no bloquear el flujo con un solo operador.
 - **JSON en vez de HTML para vacantes y análisis de CV:** el admin (o los
   skills) siguen usando Claude para todo el trabajo de análisis/redacción,
   pero el output es datos estructurados — las páginas ya tienen el diseño

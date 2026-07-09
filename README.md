@@ -68,6 +68,12 @@ normal, no hace falta.
    A partir de ahí, ese email entra como admin en `/admin-login` y
    como usuario normal en `/login.html` (son el mismo login de Supabase,
    lo único que cambia es qué endpoints del backend le dejamos usar).
+   - Opcional: para que alguien revise (apruebe/rechace/reemplace) el CV
+     optimizado y las vacantes antes de que el candidato las vea, registrá
+     esa cuenta también en `/login.html` y agregá su email a
+     `BACKOFFICE_EMAILS` en `backend/.env` (lista separada por coma). Entra
+     por `/backoffice-login`. El admin ya tiene este permiso automáticamente,
+     no hace falta que agregues su email también acá.
 
 Sin `SUPABASE_URL` / `SUPABASE_ANON_KEY` configurados, el login no
 funciona — es la única parte no-opcional de la configuración. **La pantalla
@@ -226,10 +232,13 @@ job-finder/
   ver `auth.py`) sin necesitar el SDK completo para eso — pero sí usa el SDK
   de Python (`supabase`, ver `services/db.py`) para leer/escribir en
   Postgres y Storage con la `service_role` key.
-- **El admin es un email, no un rol especial en la base de datos:** con un
-  MVP de una sola persona administrando, alcanza con comparar el email del
-  token contra `ADMIN_EMAIL`. Si en el futuro hay más de un admin, ahí sí
-  conviene migrar a una tabla de roles en Supabase.
+- **El admin y el backoffice son listas de emails en variables de entorno,
+  no una tabla de roles:** `ADMIN_EMAIL` (un solo email) y `BACKOFFICE_EMAILS`
+  (lista separada por coma) — alcanza para el volumen de personas
+  administrando/revisando hoy. El admin siempre tiene también permisos de
+  backoffice (jerarquía admin ⊇ backoffice ⊇ usuario). Si esto crece mucho o
+  necesitan permisos más finos, ahí sí conviene migrar a una tabla de roles
+  en Supabase.
 - **JSON en vez de HTML para las vacantes (y ahora también para el análisis
   de CV):** vos seguís usando Claude para todo el trabajo de análisis y
   redacción, pero el output es datos estructurados. Las páginas ya tienen el

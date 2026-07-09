@@ -19,9 +19,9 @@ create table if not exists sessions (
   user_id           uuid,
   user_email        text,
   cv_status         text not null default 'pending'
-                      check (cv_status in ('pending', 'ready', 'error')),
+                      check (cv_status in ('pending', 'pending_review', 'ready', 'error')),
   jobs_status       text not null default 'not_requested'
-                      check (jobs_status in ('not_requested', 'pending', 'ready', 'error')),
+                      check (jobs_status in ('not_requested', 'pending', 'pending_review', 'ready', 'error')),
   cv_requested_at   timestamptz,
   cv_ready_at       timestamptz,
   jobs_requested_at timestamptz,
@@ -45,7 +45,11 @@ create table if not exists sessions (
   cv_original_path    text,
   cv_optimizado_path  text,
   -- .zip con el CV original + puestos_candidato.json, para el admin.
-  cv_zip_path          text
+  cv_zip_path          text,
+  -- Nota opcional que deja backoffice al rechazar una carga del admin (se
+  -- limpia apenas el admin vuelve a subir o backoffice aprueba/reemplaza).
+  cv_review_note    text,
+  jobs_review_note  text
 );
 
 create index if not exists sessions_user_id_idx on sessions (user_id);
@@ -78,3 +82,19 @@ create table if not exists app_settings (
 --   alter table sessions add column if not exists roles_modo text
 --     check (roles_modo in ('candidato', 'admin'));
 --   alter table sessions add column if not exists cv_zip_path text;
+--
+-- Rol backoffice (revisión intermedia antes de que el candidato vea el CV/
+-- vacantes). IMPORTANTE: antes de correr el alter de los constraints,
+-- verificar el nombre real (probablemente sea el de abajo, por la
+-- convención default de Postgres, pero conviene confirmarlo):
+--   select conname, pg_get_constraintdef(oid) from pg_constraint
+--   where conrelid = 'sessions'::regclass and contype = 'c';
+--
+--   alter table sessions drop constraint if exists sessions_cv_status_check;
+--   alter table sessions add constraint sessions_cv_status_check
+--     check (cv_status in ('pending', 'pending_review', 'ready', 'error'));
+--   alter table sessions drop constraint if exists sessions_jobs_status_check;
+--   alter table sessions add constraint sessions_jobs_status_check
+--     check (jobs_status in ('not_requested', 'pending', 'pending_review', 'ready', 'error'));
+--   alter table sessions add column if not exists cv_review_note text;
+--   alter table sessions add column if not exists jobs_review_note text;

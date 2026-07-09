@@ -18,7 +18,7 @@ de archivos y notificaciones.
 Journey de un candidato:
 1. Sube su CV en `/index.html` → queda en estado `pending`.
 2. El admin lo optimiza (a mano o con el skill `cv-optimizer-jobfinder`) y
-   sube el `.docx` + `cv_analysis.json` desde `/admin.html`.
+   sube el `.docx` + `cv_analysis.json` desde `/admin`.
 3. El candidato ve el resultado en `/resultado.html` (scores ATS, keywords,
    roles objetivo, link de descarga) y pide "buscar vacantes".
 4. El admin arma la plataforma de vacantes (a mano o con el skill
@@ -135,7 +135,7 @@ nunca una URL pública directa).
 | `GET /api/download/cv/{id}` | dueño o admin | descarga el CV optimizado desde Storage |
 | `POST /api/jobs` | dueño o admin | marca `jobs_status=pending`, notifica al admin |
 | `GET /api/vacantes/{id}` | dueño o admin | el JSON de vacantes una vez `jobs_status=ready` |
-| `GET /api/admin/requests` | admin | todas las sesiones (para `/admin.html`) |
+| `GET /api/admin/requests` | admin | todas las sesiones (para `/admin`) |
 | `GET /api/admin/notifications` | admin | historial de avisos |
 | `GET /api/admin/download/original/{id}` | admin | descarga el CV original |
 | `GET /api/admin/drive/authorize` | admin | arma la URL de consentimiento de Google (ver sección 7) |
@@ -198,7 +198,7 @@ Como el servicio se despliega en Render sin ejecución local, la
 autorización de una sola vez se hace enteramente contra el servicio ya
 desplegado:
 
-1. Admin logueado en `/admin.html` → click "Conectar Google Drive".
+1. Admin logueado en `/admin` → click "Conectar Google Drive".
 2. `GET /api/admin/drive/authorize` (protegido, requiere admin) arma la URL
    de consentimiento y guarda el `state` en `app_settings`.
 3. El navegador va a Google, el admin acepta.
@@ -232,7 +232,7 @@ proceso manual (copiar/pegar prompts en el chat web de Claude). Ambos son
   `notas_estrategia`, `vacantes[]`).
 
 Ninguno de los dos sube archivos a la API directamente — el admin sigue
-subiéndolos a mano desde `/admin.html`, solo que ya vienen listos.
+subiéndolos a mano desde `/admin`, solo que ya vienen listos.
 
 ---
 

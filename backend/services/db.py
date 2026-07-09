@@ -49,3 +49,7 @@ def upload_file(path: str, content: bytes, content_type: str) -> None:
 
 def download_file(path: str) -> bytes:
     return get_client().storage.from_(CV_BUCKET).download(path)
+
+
+def delete_file(path: str) -> None:
+    get_client().storage.from_(CV_BUCKET).remove([path])

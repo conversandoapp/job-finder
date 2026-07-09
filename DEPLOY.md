@@ -72,7 +72,7 @@ DRIVE_OAUTH_CLIENT_SECRET=xxx
 DRIVE_OAUTH_REDIRECT_URI=https://tu-servicio.onrender.com/api/admin/drive/oauth2callback
 ```
 
-Después de desplegar, entrá a `/admin.html` logueado como admin y hacé
+Después de desplegar, entrá a `/admin` logueado como admin y hacé
 click en "☁️ Conectar Google Drive" una sola vez — el token queda guardado
 en la tabla `app_settings` de Supabase (se refresca solo de ahí en
 adelante, sin volver a pedir consentimiento salvo que revoques el acceso

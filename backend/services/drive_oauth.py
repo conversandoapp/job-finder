@@ -4,7 +4,7 @@ de usuario, ver storage_drive.py para el porqué).
 
 No hay ejecución local en este proyecto (se despliega directo en Render),
 así que la autorización de una sola vez se hace enteramente contra el
-servicio ya desplegado: el admin entra a /admin.html, hace click en
+servicio ya desplegado: el admin entra a /admin, hace click en
 "Conectar Google Drive", y dos endpoints en app.py (/api/admin/drive/authorize
 y /api/admin/drive/oauth2callback) manejan el ida y vuelta con Google.
 
@@ -59,7 +59,7 @@ def exchange_code(redirect_uri: str, code: str, state: str) -> Credentials:
     code por credenciales. Lanza ValueError si el state no coincide."""
     pending = db.get_setting(_PENDING_STATE_KEY)
     if not pending or state != pending.get("state"):
-        raise ValueError("state inválido o expirado -- vuelve a iniciar la conexión con Drive desde /admin.html")
+        raise ValueError("state inválido o expirado -- vuelve a iniciar la conexión con Drive desde /admin")
     db.delete_setting(_PENDING_STATE_KEY)
 
     flow = build_flow(redirect_uri)

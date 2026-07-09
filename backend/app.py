@@ -6,7 +6,7 @@ No hay agentes automáticos de IA corriendo en el servidor. El flujo es:
   1. Usuario sube su CV -> se guarda en Supabase (+ Google Drive si está
      configurado) -> se notifica al admin (conversandoapp@gmail.com) ->
      usuario ve "estamos procesando, puede tardar hasta 24h".
-  2. Admin (vos) entra a /admin.html, ve la solicitud, optimiza el CV a
+  2. Admin (vos) entra a /admin, ve la solicitud, optimiza el CV a
      mano (podés usar Claude para redactarlo) y sube el .docx resultante
      + un puntaje ATS simple desde el panel.
   3. Usuario vuelve a entrar a /resultado.html?session=... y si ya está
@@ -28,7 +28,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from services import auth, db, drive_oauth, notifications, sessions, storage_drive
@@ -190,7 +190,7 @@ async def vacantes(session_id: str, user: dict = Depends(auth.get_current_user))
 
 
 # ---------------------------------------------------------------------------
-# Endpoints de admin (panel local /admin.html) — requieren la cuenta admin
+# Endpoints de admin (panel local /admin) — requieren la cuenta admin
 # ---------------------------------------------------------------------------
 
 @app.get("/api/admin/requests")
@@ -246,7 +246,7 @@ async def admin_drive_oauth2callback(request: Request):
     error = request.query_params.get("error")
 
     if error:
-        return HTMLResponse(f"<p>Google devolvió un error: {error}. Vuelve a /admin.html e intenta de nuevo.</p>", status_code=400)
+        return HTMLResponse(f"<p>Google devolvió un error: {error}. Vuelve a /admin e intenta de nuevo.</p>", status_code=400)
     if not code or not state:
         return HTMLResponse("<p>Faltan parámetros en la redirección de Google.</p>", status_code=400)
 
@@ -255,7 +255,7 @@ async def admin_drive_oauth2callback(request: Request):
         creds = drive_oauth.exchange_code(redirect_uri, code, state)
         drive_oauth.save_credentials(creds)
     except Exception as e:
-        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Vuelve a /admin.html e intenta de nuevo.</p>", status_code=400)
+        return HTMLResponse(f"<p>No se pudo conectar Google Drive: {e}. Vuelve a /admin e intenta de nuevo.</p>", status_code=400)
 
     return HTMLResponse("<p>Google Drive conectado correctamente. Ya puedes cerrar esta pestaña.</p>")
 
@@ -327,8 +327,59 @@ async def admin_upload_vacantes(
     return {"status": "ok"}
 
 
+@app.delete("/api/admin/{session_id}/cv")
+async def admin_delete_cv(session_id: str, user: dict = Depends(auth.require_admin)):
+    """Borra el análisis de CV subido por el admin (deja la sesión como si
+    todavía no se hubiera procesado). También borra el .docx/.pdf optimizado
+    del storage si existe."""
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    if data.get("cv_optimizado_path"):
+        try:
+            db.delete_file(data["cv_optimizado_path"])
+        except Exception:
+            pass  # no bloquear el borrado del registro si falla el storage
+
+    sessions.update_session(
+        session_id,
+        cv_optimizado_path=None,
+        cv_scores=None,
+        cv_status="pending",
+        cv_ready_at=None,
+    )
+    return {"status": "ok"}
+
+
+@app.delete("/api/admin/{session_id}/vacantes")
+async def admin_delete_vacantes(session_id: str, user: dict = Depends(auth.require_admin)):
+    """Borra las vacantes subidas por el admin (vuelve a 'not_requested')."""
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+
+    sessions.update_session(
+        session_id,
+        vacantes=None,
+        jobs_status="not_requested",
+        jobs_ready_at=None,
+    )
+    return {"status": "ok"}
+
+
 # ---------------------------------------------------------------------------
 # Frontend estático
 # ---------------------------------------------------------------------------
+
+@app.get("/admin")
+async def admin_panel_short():
+    return FileResponse(FRONTEND_DIR / "admin.html")
+
+
+@app.get("/admin-login")
+async def admin_login_short():
+    return FileResponse(FRONTEND_DIR / "admin-login.html")
+
 
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

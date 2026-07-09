@@ -15,7 +15,7 @@
 <body>
 
 <div class="top-header">
-  <a class="brand top-header-link" href="/admin.html">🛠️ Job Finder <span class="tag">panel admin (solo tú)</span></a>
+  <a class="brand top-header-link" href="/admin">🛠️ Job Finder <span class="tag">panel admin (solo tú)</span></a>
 </div>
 <div class="user-bar" id="user-bar"></div>
 
@@ -80,6 +80,7 @@
         <input type="file" name="scores_file" accept=".json" required />
 
         <button type="submit" class="btn">Subir CV optimizado</button>
+        <button type="button" class="btn secondary btn-delete-cv" style="display:none;">🗑️ Borrar análisis de CV</button>
         <div class="form-msg"></div>
       </form>
     </div>
@@ -93,6 +94,7 @@
       <form class="vacantes-upload-form">
         <input type="file" name="file" accept=".json" required />
         <button type="submit" class="btn">Subir vacantes.json</button>
+        <button type="button" class="btn secondary btn-delete-vacantes" style="display:none;">🗑️ Borrar vacantes</button>
         <div class="form-msg"></div>
       </form>
     </div>

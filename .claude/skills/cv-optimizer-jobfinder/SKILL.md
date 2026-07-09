@@ -3,7 +3,7 @@ name: cv-optimizer-jobfinder
 description: >
   Optimizador de CVs con scoring ATS para el flujo de admin de Job Finder. Úsalo
   cuando el admin quiera: optimizar el CV de un candidato para el panel
-  (/admin.html), generar los dos outputs que exige la sección "Subir CV
+  (/admin), generar los dos outputs que exige la sección "Subir CV
   optimizado" del panel (cv_optimizado_{nombre}.docx y analysis_{nombre}.json),
   o puntuar un CV para un rol objetivo. Se activa con frases como "optimiza
   este CV para el panel", "generame el analysis_json de este candidato",
@@ -31,7 +31,7 @@ postulante se llama "Andrés García", `{nombre}` = `andres`):
 | `analysis_{nombre}.json` | JSON | Análisis ATS con scores, roles, keywords y debilidades |
 
 Ambos se guardan en el mismo directorio que el CV de entrada.
-El admin los sube manualmente desde `/admin.html`, sección "Subir CV optimizado".
+El admin los sube manualmente desde `/admin`, sección "Subir CV optimizado".
 
 ## Por qué el JSON tiene este esquema exacto
 
@@ -299,7 +299,7 @@ Los dos outputs generados son:
 - `analysis_{nombre}.json` — Análisis ATS con scores, roles, keywords y debilidades
 
 Recordale al admin que todavía tiene que subir **ambos archivos** a mano desde
-`/admin.html`, en la tarjeta de la solicitud correspondiente, sección
+`/admin`, en la tarjeta de la solicitud correspondiente, sección
 "Subir CV optimizado" — este skill no llama a la API directamente.
 
 ---

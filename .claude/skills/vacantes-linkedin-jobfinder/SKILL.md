@@ -33,7 +33,7 @@ del postulante en minúsculas y sin tildes** como parte del nombre:
 
 Ejemplo: postulante "Andrés García" → `vacantes_andres.json`.
 El archivo se guarda en la misma carpeta que el CV optimizado.
-El admin lo sube manualmente desde `/admin.html`, sección "Subir vacantes.json".
+El admin lo sube manualmente desde `/admin`, sección "Subir vacantes.json".
 
 **A diferencia de un generador de informe HTML**, acá no se genera ningún
 HTML: la plataforma (`vacantes.html` + `vacantes.js` + `vacantes.css`) ya
@@ -282,7 +282,7 @@ son las Top 5, y cualquier término de búsqueda que no dio resultados (útil
 para `notas_estrategia`).
 
 Este skill **no sube nada a la API directamente**. Recordale al admin que
-tiene que ir a `/admin.html`, a la tarjeta de esa solicitud, sección "Subir
+tiene que ir a `/admin`, a la tarjeta de esa solicitud, sección "Subir
 vacantes.json", y subir ahí el archivo `vacantes_{nombre}.json` generado.
 
 ---

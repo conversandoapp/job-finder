@@ -20,7 +20,7 @@ normal (15GB gratis).
      "<url-del-servicio>/api/admin/drive/oauth2callback".
   4. En las variables de entorno del servicio: DRIVE_OAUTH_CLIENT_ID,
      DRIVE_OAUTH_CLIENT_SECRET, DRIVE_OAUTH_REDIRECT_URI, DRIVE_ENABLED=true.
-  5. Entrar a /admin.html logueado como admin y hacer click en
+  5. Entrar a /admin logueado como admin y hacer click en
      "Conectar Google Drive" -- eso guarda el token en la tabla
      app_settings de Supabase (ver drive_oauth.py).
 
@@ -54,7 +54,7 @@ def _get_credentials():
     token_data = db.get_setting("drive_token")
     if not token_data:
         raise RuntimeError(
-            "No hay token de Drive todavía. Entra a /admin.html y haz clic "
+            "No hay token de Drive todavía. Entra a /admin y haz clic "
             "en 'Conectar Google Drive'."
         )
 

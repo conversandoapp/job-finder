@@ -12,11 +12,11 @@ entrar a su link cuando quiere consultar si ya está listo.
 ## Flujo
 
 0. El usuario se crea una cuenta él mismo en `/login.html` (email + contraseña,
-   vía Supabase). Vos entrás a `/admin-login.html` con tu única cuenta admin.
+   vía Supabase). Vos entrás a `/admin-login` con tu única cuenta admin.
 1. Usuario entra a `/` (`index.html`), sube su CV → ve "estamos procesando,
    hasta 24h" y un link para volver más tarde.
 2. Vos recibís un aviso (panel admin + email si lo activás) con el CV.
-3. Entrás a `/admin.html`, le pegás el CV a Claude con el prompt de
+3. Entrás a `/admin`, le pegás el CV a Claude con el prompt de
    `backend/schemas/prompt_para_claude_cv_analysis.md` y te devuelve un
    `cv_analysis.json` (scores ATS, roles, keywords, debilidades) + el texto
    del CV reescrito para pegar en Word. Subís el `.docx` que armaste + ese
@@ -65,7 +65,7 @@ normal, no hace falta.
 5. Creá tu cuenta admin: abrí `http://localhost:8000/login.html` (la de
    usuarios normales) y registrate una vez con el email que vayas a usar
    como admin. Después poné ese mismo email en `ADMIN_EMAIL` en `backend/.env`.
-   A partir de ahí, ese email entra como admin en `/admin-login.html` y
+   A partir de ahí, ese email entra como admin en `/admin-login` y
    como usuario normal en `/login.html` (son el mismo login de Supabase,
    lo único que cambia es qué endpoints del backend le dejamos usar).
 
@@ -93,7 +93,7 @@ uvicorn app:app --reload --port 8000
 ```
 
 Abrí `http://localhost:8000/index.html` — esa es la vista del usuario
-(pide login/registro). Abrí `http://localhost:8000/admin-login.html` para
+(pide login/registro). Abrí `http://localhost:8000/admin-login` para
 entrar a tu panel.
 
 Sin tocar nada más, las notificaciones y los CVs quedan guardados en tu
@@ -162,7 +162,7 @@ contra el servicio ya desplegado, desde el panel admin:
    DRIVE_OAUTH_CLIENT_SECRET=el-client-secret
    DRIVE_OAUTH_REDIRECT_URI=https://TU-SERVICIO.onrender.com/api/admin/drive/oauth2callback
    ```
-5. Entrá a `/admin.html` logueado como admin y hacé click en "☁️ Conectar
+5. Entrá a `/admin` logueado como admin y hacé click en "☁️ Conectar
    Google Drive". Vas a ver un aviso de "app no verificada" — es esperable
    para un uso personal de un solo usuario, click en "Avanzado" → "Ir a
    Job Finder (no seguro)". Al aceptar, queda guardado el token.

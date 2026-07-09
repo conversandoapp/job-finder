@@ -99,7 +99,10 @@ async def analyze(
     if drive_link:
         sessions.update_session(session_id, cv_drive_link=drive_link)
 
-    notifications.notify_cv_uploaded(session_id, candidate_name, pais, linkedin_url, drive_link)
+    try:
+        notifications.notify_cv_uploaded(session_id, candidate_name, pais, linkedin_url, drive_link)
+    except Exception as e:  # noqa: BLE001
+        print(f"[analyze] ERROR notificando CV subido: {e}")
 
     return {"session_id": session_id, "status": "processing"}
 

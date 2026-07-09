@@ -66,6 +66,28 @@ async function requireAdmin() {
   return who;
 }
 
+async function requireBackoffice() {
+  const session = await requireAuth("/backoffice-login");
+  if (!session) return null;
+
+  const res = await authFetch("/api/whoami");
+  if (!res.ok) {
+    _redirectToLogin("/backoffice-login");
+    return null;
+  }
+  const who = await res.json();
+  if (!who.is_backoffice) {
+    document.body.innerHTML = `
+      <div style="max-width:480px;margin:80px auto;text-align:center;font-family:sans-serif;padding:0 20px;">
+        <h2>Acceso denegado</h2>
+        <p style="color:#5b6b76;">Esta cuenta (${who.email}) no tiene permisos de revisor (backoffice).</p>
+        <a href="/index.html" style="color:#0077b5;">Ir a la app</a>
+      </div>`;
+    return null;
+  }
+  return who;
+}
+
 async function authFetch(url, options = {}) {
   const session = await getSession();
   if (!session) {
@@ -101,6 +123,7 @@ window.JFAuth = {
   getSession,
   requireAuth,
   requireAdmin,
+  requireBackoffice,
   authFetch,
   logout,
   renderUserBar,

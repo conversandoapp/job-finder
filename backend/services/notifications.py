@@ -138,3 +138,47 @@ def notify_jobs_requested(session_id: str, candidate_name: str | None, pais: str
         f"{_base_url()}/admin#{session_id}\n"
     )
     return send_notification(subject, body)
+
+
+def notify_pending_review(session_id: str, candidate_name: str | None, kind: str) -> dict:
+    """kind: "cv" | "vacantes" — avisa que hay algo nuevo esperando aprobación
+    de backoffice."""
+    label = "CV optimizado" if kind == "cv" else "Vacantes"
+    subject = f"[Job Finder] {label} esperando revisión — sesión {session_id[:8]}"
+    body = (
+        f"Hay contenido nuevo esperando aprobación de backoffice.\n\n"
+        f"Session ID: {session_id}\n"
+        f"Nombre: {candidate_name or '(no detectado)'}\n"
+        f"Tipo: {label}\n\n"
+        f"Entra al panel backoffice para revisarlo:\n"
+        f"{_base_url()}/backoffice#{session_id}\n"
+    )
+    return send_notification(subject, body)
+
+
+def notify_cv_rejected(session_id: str, candidate_name: str | None, note: str) -> dict:
+    subject = f"[Job Finder] CV rechazado por backoffice — sesión {session_id[:8]}"
+    body = (
+        f"El CV optimizado subido fue rechazado por backoffice y necesita que "
+        f"lo vuelvas a subir.\n\n"
+        f"Session ID: {session_id}\n"
+        f"Nombre: {candidate_name or '(no detectado)'}\n"
+        f"Nota del revisor: {note or '(sin nota)'}\n\n"
+        f"Entra al panel admin para volver a subirlo:\n"
+        f"{_base_url()}/admin#{session_id}\n"
+    )
+    return send_notification(subject, body)
+
+
+def notify_vacantes_rejected(session_id: str, candidate_name: str | None, note: str) -> dict:
+    subject = f"[Job Finder] Vacantes rechazadas por backoffice — sesión {session_id[:8]}"
+    body = (
+        f"El vacantes.json subido fue rechazado por backoffice y necesita que "
+        f"lo vuelvas a subir.\n\n"
+        f"Session ID: {session_id}\n"
+        f"Nombre: {candidate_name or '(no detectado)'}\n"
+        f"Nota del revisor: {note or '(sin nota)'}\n\n"
+        f"Entra al panel admin para volver a subirlo:\n"
+        f"{_base_url()}/admin#{session_id}\n"
+    )
+    return send_notification(subject, body)

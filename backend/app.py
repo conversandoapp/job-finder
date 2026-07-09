@@ -67,7 +67,12 @@ async def config():
 
 @app.get("/api/whoami")
 async def whoami(user: dict = Depends(auth.get_current_user)):
-    return {"id": user["id"], "email": user["email"], "is_admin": auth.is_admin(user)}
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "is_admin": auth.is_admin(user),
+        "is_backoffice": auth.is_backoffice(user),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +176,7 @@ async def status(session_id: str, user: dict = Depends(auth.get_current_user)):
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
-    auth.ensure_owner_or_admin(data, user)
+    auth.ensure_owner_or_backoffice(data, user)
     return data
 
 
@@ -180,13 +185,15 @@ async def result(session_id: str, user: dict = Depends(auth.get_current_user)):
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
-    auth.ensure_owner_or_admin(data, user)
-    if data["cv_status"] != "ready":
+    auth.ensure_owner_or_backoffice(data, user)
+
+    is_reviewer_preview = auth.is_backoffice(user) and data["cv_status"] == "pending_review"
+    if data["cv_status"] != "ready" and not is_reviewer_preview:
         return JSONResponse({"cv_status": data["cv_status"]}, status_code=202)
 
     scores = data.get("cv_scores") or {}
 
-    return {"cv_status": "ready", "session": data, "scores": scores}
+    return {"cv_status": data["cv_status"], "session": data, "scores": scores}
 
 
 @app.get("/api/download/cv/{session_id}")
@@ -194,7 +201,7 @@ async def download_cv(session_id: str, user: dict = Depends(auth.get_current_use
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
-    auth.ensure_owner_or_admin(data, user)
+    auth.ensure_owner_or_backoffice(data, user)
 
     path = data.get("cv_optimizado_path")
     if not path:
@@ -235,8 +242,10 @@ async def vacantes(session_id: str, user: dict = Depends(auth.get_current_user))
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
-    auth.ensure_owner_or_admin(data, user)
-    if data["jobs_status"] != "ready":
+    auth.ensure_owner_or_backoffice(data, user)
+
+    is_reviewer_preview = auth.is_backoffice(user) and data["jobs_status"] == "pending_review"
+    if data["jobs_status"] != "ready" and not is_reviewer_preview:
         return JSONResponse({"jobs_status": data["jobs_status"]}, status_code=202)
 
     vacantes = data.get("vacantes")
@@ -336,6 +345,41 @@ async def admin_drive_oauth2callback(request: Request):
     return HTMLResponse("<p>Google Drive conectado correctamente. Ya puedes cerrar esta pestaña.</p>")
 
 
+CV_ANALYSIS_REQUIRED_KEYS = {"ats_score_original", "ats_score_optimizado", "roles_objetivo",
+                             "keywords_agregados", "debilidades"}
+
+
+async def _parse_cv_analysis_json(scores_file: UploadFile) -> dict:
+    raw = await scores_file.read()
+    try:
+        scores = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"cv_analysis.json no es JSON válido: {e}")
+    missing = CV_ANALYSIS_REQUIRED_KEYS - scores.keys()
+    if missing:
+        raise HTTPException(400, f"Al JSON le faltan estas claves: {', '.join(sorted(missing))}")
+    return scores
+
+
+async def _store_cv_optimizado(session_id: str, file: UploadFile) -> str:
+    ext = Path(file.filename or "cv.docx").suffix or ".docx"
+    content = await file.read()
+    path = f"{session_id}/cv_optimizado{ext}"
+    db.upload_file(path, content, file.content_type or "application/octet-stream")
+    return path
+
+
+async def _parse_vacantes_json(file: UploadFile) -> dict:
+    raw = await file.read()
+    try:
+        parsed = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"El archivo no es JSON válido: {e}")
+    if "vacantes" not in parsed:
+        raise HTTPException(400, "El JSON debe tener una clave 'vacantes' con la lista de ofertas.")
+    return parsed
+
+
 @app.post("/api/admin/{session_id}/cv")
 async def admin_upload_cv(
     session_id: str,
@@ -344,36 +388,27 @@ async def admin_upload_cv(
     user: dict = Depends(auth.require_admin),
 ):
     """Sube el CV optimizado (.docx/.pdf) + un único cv_analysis.json generado
-    con Claude (ver backend/schemas/prompt_para_claude_cv_analysis.md)."""
+    con Claude (ver backend/schemas/prompt_para_claude_cv_analysis.md). Queda
+    en pending_review hasta que backoffice lo apruebe, rechace o reemplace."""
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
 
-    ext = Path(file.filename or "cv.docx").suffix or ".docx"
-    content = await file.read()
-
-    raw = await scores_file.read()
-    try:
-        scores = json.loads(raw.decode("utf-8"))
-    except json.JSONDecodeError as e:
-        raise HTTPException(400, f"cv_analysis.json no es JSON válido: {e}")
-
-    required_keys = {"ats_score_original", "ats_score_optimizado", "roles_objetivo",
-                      "keywords_agregados", "debilidades"}
-    missing = required_keys - scores.keys()
-    if missing:
-        raise HTTPException(400, f"Al JSON le faltan estas claves: {', '.join(sorted(missing))}")
-
-    optimizado_path = f"{session_id}/cv_optimizado{ext}"
-    db.upload_file(optimizado_path, content, file.content_type or "application/octet-stream")
+    scores = await _parse_cv_analysis_json(scores_file)
+    optimizado_path = await _store_cv_optimizado(session_id, file)
 
     sessions.update_session(
         session_id,
         cv_optimizado_path=optimizado_path,
         cv_scores=scores,
-        cv_status="ready",
-        cv_ready_at=datetime.now(timezone.utc).isoformat(),
+        cv_status="pending_review",
+        cv_ready_at=None,
+        cv_review_note=None,
     )
+    try:
+        notifications.notify_pending_review(session_id, data.get("candidate_name"), "cv")
+    except Exception as e:  # noqa: BLE001
+        print(f"[admin] ERROR notificando CV pendiente de revisión: {e}")
     return {"status": "ok"}
 
 
@@ -385,21 +420,19 @@ async def admin_upload_vacantes(
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
 
-    raw = await file.read()
-    try:
-        parsed = json.loads(raw.decode("utf-8"))
-    except json.JSONDecodeError as e:
-        raise HTTPException(400, f"El archivo no es JSON válido: {e}")
-
-    if "vacantes" not in parsed:
-        raise HTTPException(400, "El JSON debe tener una clave 'vacantes' con la lista de ofertas.")
+    parsed = await _parse_vacantes_json(file)
 
     sessions.update_session(
         session_id,
         vacantes=parsed,
-        jobs_status="ready",
-        jobs_ready_at=datetime.now(timezone.utc).isoformat(),
+        jobs_status="pending_review",
+        jobs_ready_at=None,
+        jobs_review_note=None,
     )
+    try:
+        notifications.notify_pending_review(session_id, data.get("candidate_name"), "vacantes")
+    except Exception as e:  # noqa: BLE001
+        print(f"[admin] ERROR notificando vacantes pendientes de revisión: {e}")
     return {"status": "ok"}
 
 
@@ -424,6 +457,7 @@ async def admin_delete_cv(session_id: str, user: dict = Depends(auth.require_adm
         cv_scores=None,
         cv_status="pending",
         cv_ready_at=None,
+        cv_review_note=None,
     )
     return {"status": "ok"}
 
@@ -440,6 +474,155 @@ async def admin_delete_vacantes(session_id: str, user: dict = Depends(auth.requi
         vacantes=None,
         jobs_status="not_requested",
         jobs_ready_at=None,
+        jobs_review_note=None,
+    )
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de backoffice (revisa lo que sube el admin antes de que llegue al
+# candidato) — requieren permisos de backoffice (o admin, que los incluye).
+# ---------------------------------------------------------------------------
+
+@app.get("/api/backoffice/requests")
+async def backoffice_requests(user: dict = Depends(auth.require_backoffice)):
+    return sessions.list_sessions()
+
+
+@app.post("/api/backoffice/{session_id}/cv/approve")
+async def backoffice_approve_cv(session_id: str, user: dict = Depends(auth.require_backoffice)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("cv_status") != "pending_review":
+        raise HTTPException(400, "El CV de esta sesión no está esperando revisión.")
+
+    sessions.update_session(
+        session_id,
+        cv_status="ready",
+        cv_ready_at=datetime.now(timezone.utc).isoformat(),
+        cv_review_note=None,
+    )
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/cv/reject")
+async def backoffice_reject_cv(
+    session_id: str, note: str = Form(""), user: dict = Depends(auth.require_backoffice)
+):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("cv_status") != "pending_review":
+        raise HTTPException(400, "El CV de esta sesión no está esperando revisión.")
+
+    if data.get("cv_optimizado_path"):
+        try:
+            db.delete_file(data["cv_optimizado_path"])
+        except Exception:
+            pass  # no bloquear el rechazo si falla el storage
+
+    sessions.update_session(
+        session_id,
+        cv_optimizado_path=None,
+        cv_scores=None,
+        cv_status="pending",
+        cv_ready_at=None,
+        cv_review_note=note.strip() or None,
+    )
+    try:
+        notifications.notify_cv_rejected(session_id, data.get("candidate_name"), note.strip())
+    except Exception as e:  # noqa: BLE001
+        print(f"[backoffice] ERROR notificando rechazo de CV: {e}")
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/cv/replace")
+async def backoffice_replace_cv(
+    session_id: str,
+    file: UploadFile = File(...),
+    scores_file: UploadFile = File(...),
+    user: dict = Depends(auth.require_backoffice),
+):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("cv_status") != "pending_review":
+        raise HTTPException(400, "El CV de esta sesión no está esperando revisión.")
+
+    scores = await _parse_cv_analysis_json(scores_file)
+    optimizado_path = await _store_cv_optimizado(session_id, file)
+
+    sessions.update_session(
+        session_id,
+        cv_optimizado_path=optimizado_path,
+        cv_scores=scores,
+        cv_status="ready",
+        cv_ready_at=datetime.now(timezone.utc).isoformat(),
+        cv_review_note=None,
+    )
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/vacantes/approve")
+async def backoffice_approve_vacantes(session_id: str, user: dict = Depends(auth.require_backoffice)):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("jobs_status") != "pending_review":
+        raise HTTPException(400, "Las vacantes de esta sesión no están esperando revisión.")
+
+    sessions.update_session(
+        session_id,
+        jobs_status="ready",
+        jobs_ready_at=datetime.now(timezone.utc).isoformat(),
+        jobs_review_note=None,
+    )
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/vacantes/reject")
+async def backoffice_reject_vacantes(
+    session_id: str, note: str = Form(""), user: dict = Depends(auth.require_backoffice)
+):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("jobs_status") != "pending_review":
+        raise HTTPException(400, "Las vacantes de esta sesión no están esperando revisión.")
+
+    sessions.update_session(
+        session_id,
+        vacantes=None,
+        jobs_status="pending",
+        jobs_ready_at=None,
+        jobs_review_note=note.strip() or None,
+    )
+    try:
+        notifications.notify_vacantes_rejected(session_id, data.get("candidate_name"), note.strip())
+    except Exception as e:  # noqa: BLE001
+        print(f"[backoffice] ERROR notificando rechazo de vacantes: {e}")
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/vacantes/replace")
+async def backoffice_replace_vacantes(
+    session_id: str, file: UploadFile = File(...), user: dict = Depends(auth.require_backoffice)
+):
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("jobs_status") != "pending_review":
+        raise HTTPException(400, "Las vacantes de esta sesión no están esperando revisión.")
+
+    parsed = await _parse_vacantes_json(file)
+
+    sessions.update_session(
+        session_id,
+        vacantes=parsed,
+        jobs_status="ready",
+        jobs_ready_at=datetime.now(timezone.utc).isoformat(),
+        jobs_review_note=None,
     )
     return {"status": "ok"}
 
@@ -456,6 +639,16 @@ async def admin_panel_short():
 @app.get("/admin-login")
 async def admin_login_short():
     return FileResponse(FRONTEND_DIR / "admin-login.html")
+
+
+@app.get("/backoffice")
+async def backoffice_panel():
+    return FileResponse(FRONTEND_DIR / "backoffice.html")
+
+
+@app.get("/backoffice-login")
+async def backoffice_login_page():
+    return FileResponse(FRONTEND_DIR / "backoffice-login.html")
 
 
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

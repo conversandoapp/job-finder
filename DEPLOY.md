@@ -47,6 +47,7 @@ el commit.
    SUPABASE_ANON_KEY=sb_publishable_xxx
    SUPABASE_SERVICE_ROLE_KEY=xxx   (Project Settings → API → "service_role")
    ADMIN_EMAIL=conversandoapp@gmail.com
+   BACKOFFICE_EMAILS=                (opcional, lista de emails separados por coma)
    NOTIFY_EMAIL_ENABLED=false
    DRIVE_ENABLED=false
    ```
@@ -96,6 +97,7 @@ Las mismas que en `backend/.env.example`, cargadas en la pestaña
 | `SUPABASE_SERVICE_ROLE_KEY` | Sí | secreta — Project Settings → API → "service_role" |
 | `SUPABASE_JWT_SECRET` | No | vacío en proyectos nuevos de Supabase |
 | `ADMIN_EMAIL` | Sí | |
+| `BACKOFFICE_EMAILS` | No | lista separada por coma; el admin ya tiene este permiso automáticamente |
 | `NOTIFY_EMAIL_ENABLED` | No | `false` si no configurás email |
 | `NOTIFY_EMAIL_APP_PASSWORD` | No | secreta |
 | `DRIVE_ENABLED` | No | `false` si no configurás Drive |
@@ -146,7 +148,7 @@ Desde `job-finder/` (donde está el `Dockerfile`):
 gcloud run deploy job-finder `
   --source . `
   --allow-unauthenticated `
-  --set-env-vars="SUPABASE_URL=https://tu-project-ref.supabase.co,SUPABASE_ANON_KEY=sb_publishable_xxx,SUPABASE_SERVICE_ROLE_KEY=xxx,ADMIN_EMAIL=conversandoapp@gmail.com,NOTIFY_EMAIL_ENABLED=false,DRIVE_ENABLED=false"
+  --set-env-vars="SUPABASE_URL=https://tu-project-ref.supabase.co,SUPABASE_ANON_KEY=sb_publishable_xxx,SUPABASE_SERVICE_ROLE_KEY=xxx,ADMIN_EMAIL=conversandoapp@gmail.com,BACKOFFICE_EMAILS=,NOTIFY_EMAIL_ENABLED=false,DRIVE_ENABLED=false"
 ```
 
 (En PowerShell el salto de línea es con `` ` ``; en bash/Mac/Linux usá `\`

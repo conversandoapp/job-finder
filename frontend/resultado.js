@@ -6,11 +6,18 @@ const errorView = document.getElementById("error-view");
 const readyView = document.getElementById("ready-view");
 
 let pollTimer = null;
+let isBackoffice = false;
 
 async function init() {
   const session = await JFAuth.requireAuth();
   if (!session) return;
   JFAuth.renderUserBar("user-bar");
+
+  const whoRes = await JFAuth.authFetch("/api/whoami");
+  if (whoRes.ok) {
+    const who = await whoRes.json();
+    isBackoffice = !!who.is_backoffice;
+  }
 
   if (!sessionId) {
     errorView.style.display = "block";
@@ -28,7 +35,8 @@ async function refresh() {
     }
     const data = await res.json();
 
-    if (data.cv_status !== "ready") {
+    const isPreviewable = isBackoffice && data.cv_status === "pending_review";
+    if (data.cv_status !== "ready" && !isPreviewable) {
       pendingView.style.display = "block";
       readyView.style.display = "none";
       if (!pollTimer) pollTimer = setInterval(refresh, 10000);
@@ -37,14 +45,29 @@ async function refresh() {
 
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     pendingView.style.display = "none";
-    await renderReady(data);
+    await renderReady(data, isPreviewable);
   } catch (e) {
     errorView.style.display = "block";
   }
 }
 
-async function renderReady(sessionData) {
+async function renderReady(sessionData, isPreviewable = false) {
   readyView.style.display = "block";
+
+  let banner = document.getElementById("backoffice-preview-banner");
+  if (isPreviewable) {
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "backoffice-preview-banner";
+      banner.className = "card";
+      banner.style.background = "#fff3cd";
+      banner.style.borderColor = "#ffe08a";
+      banner.textContent = "🕵️ Vista previa de revisión — el candidato todavía no ve esto.";
+      readyView.prepend(banner);
+    }
+  } else if (banner) {
+    banner.remove();
+  }
 
   const resultRes = await JFAuth.authFetch(`/api/result/${sessionId}`);
   const result = await resultRes.json();
@@ -102,7 +125,7 @@ async function renderReady(sessionData) {
   }
 
   setupDownloadLink();
-  setupJobsCta(sessionData);
+  setupJobsCta(sessionData, isPreviewable);
 }
 
 function setupDownloadLink() {
@@ -136,12 +159,19 @@ function setupDownloadLink() {
   });
 }
 
-function setupJobsCta(sessionData) {
+function setupJobsCta(sessionData, isPreviewable = false) {
   const jobsBtn = document.getElementById("jobs-btn");
   const jobsPendingView = document.getElementById("jobs-pending-view");
   const jobsReadyView = document.getElementById("jobs-ready-view");
   const jobsLink = document.getElementById("jobs-link");
   jobsLink.href = `/vacantes.html?session=${sessionId}`;
+
+  if (isPreviewable) {
+    // Vista previa de backoffice sobre un CV todavía pendiente de revisión:
+    // no tiene sentido ofrecer pedir vacantes (esa acción es del candidato).
+    jobsBtn.parentElement.style.display = "none";
+    return;
+  }
 
   if (sessionData.jobs_status === "ready") {
     jobsBtn.parentElement.style.display = "none";

@@ -21,6 +21,12 @@ El admin es UNA sola cuenta: cualquier usuario autenticado cuyo email
 coincida con ADMIN_EMAIL (variable de entorno) puede usar los endpoints
 `/api/admin/*`. Todos los demás usuarios autenticados son "usuarios normales"
 y solo pueden ver/tocar sus propias sesiones (comparando user_id).
+
+Además existe el rol "backoffice" (revisa lo que sube el admin antes de que
+llegue al candidato): cualquier email listado en BACKOFFICE_EMAILS (variable
+de entorno, separada por coma) puede usar los endpoints `/api/backoffice/*`.
+El admin siempre tiene también permisos de backoffice (jerarquía admin ⊇
+backoffice ⊇ usuario) sin necesidad de listar su email en BACKOFFICE_EMAILS.
 """
 import os
 
@@ -41,6 +47,20 @@ def is_admin(user: dict) -> bool:
     if not admin_email:
         return False
     return (user.get("email") or "").strip().lower() == admin_email
+
+
+def _backoffice_emails() -> set[str]:
+    raw = os.getenv("BACKOFFICE_EMAILS", "")
+    # El filtro "if e.strip()" es obligatorio: sin él, con la env var vacía
+    # el set quedaría en {""}, y cualquier JWT sin claim "email" (ej. algún
+    # esquema de auth por teléfono) calificaría como backoffice por accidente.
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def is_backoffice(user: dict) -> bool:
+    if is_admin(user):
+        return True
+    return (user.get("email") or "").strip().lower() in _backoffice_emails()
 
 
 def _get_jwks_client() -> PyJWKClient | None:
@@ -128,5 +148,24 @@ def ensure_owner_or_admin(session_data: dict, user: dict) -> None:
     if session_data.get("user_id") == user.get("id"):
         return
     if is_admin(user):
+        return
+    raise HTTPException(403, "No tienes acceso a esta sesión")
+
+
+def require_backoffice(request: Request) -> dict:
+    """Dependency de FastAPI: exige que el usuario autenticado tenga permisos
+    de backoffice (o sea admin, que los incluye por jerarquía)."""
+    user = get_current_user(request)
+    if not is_backoffice(user):
+        raise HTTPException(403, "No tienes permisos de backoffice para esta acción")
+    return user
+
+
+def ensure_owner_or_backoffice(session_data: dict, user: dict) -> None:
+    """Lanza 403 si el usuario no es dueño de la sesión ni tiene permisos de
+    backoffice (esto último incluye al admin, por jerarquía)."""
+    if session_data.get("user_id") == user.get("id"):
+        return
+    if is_backoffice(user):
         return
     raise HTTPException(403, "No tienes acceso a esta sesión")

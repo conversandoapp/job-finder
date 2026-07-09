@@ -94,6 +94,27 @@ async function loadRequests(force = false) {
       downloadOriginal(req.session_id);
     });
 
+    const rolesWrap = node.querySelector(".req-roles-sugeridos");
+    const rolesListEl = node.querySelector(".roles-sugeridos-list");
+    const rolesSugeridos = req.roles_sugeridos || [];
+    if (!rolesSugeridos.length) {
+      rolesWrap.style.display = "none";
+    } else {
+      rolesSugeridos.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "role-card";
+        const kws = (r.keywords_encontrados || []).join(", ");
+        div.innerHTML = `
+          <div>
+            <div class="title">${r.titulo}</div>
+            ${kws ? `<div class="just">Coincidencias: ${kws}</div>` : ""}
+          </div>
+          <span class="badge blue">${r.match_porcentaje}% match</span>
+        `;
+        rolesListEl.appendChild(div);
+      });
+    }
+
     const cvFormWrap = node.querySelector(".req-cv-form");
     const cvForm = node.querySelector(".cv-upload-form");
     const deleteCvBtn = node.querySelector(".btn-delete-cv");

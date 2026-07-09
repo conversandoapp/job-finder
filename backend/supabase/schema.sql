@@ -31,6 +31,10 @@ create table if not exists sessions (
   -- Reemplazan cv_scores.json / vacantes.json (antes un archivo por sesión).
   cv_scores         jsonb,
   vacantes          jsonb,
+  -- Sugerencias automáticas de roles por palabras clave (primer filtro,
+  -- generado sin intervención humana en /api/analyze). No reemplaza el
+  -- análisis del admin en cv_scores.roles_objetivo.
+  roles_sugeridos   jsonb,
   -- Key exacta del objeto en el bucket "cv-files" de Supabase Storage.
   cv_original_path    text,
   cv_optimizado_path  text
@@ -58,3 +62,7 @@ create table if not exists app_settings (
   value      jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Cambios incrementales aplicados a mano sobre una DB ya existente (el
+-- "create table if not exists" de arriba no los aplica solo):
+--   alter table sessions add column if not exists roles_sugeridos jsonb;

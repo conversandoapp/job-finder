@@ -9,9 +9,11 @@ description: >
   plataforma de vacantes", "busca vacantes de LinkedIn para este candidato",
   "generame el vacantes.json", "procesa esta solicitud de vacantes". El input
   es la ruta del CV **optimizado** (.docx, el que generó el skill
-  cv-optimizer-jobfinder) de la persona. Requiere navegación real de LinkedIn
-  en Chrome (herramientas tipo claude-in-chrome: navigate, get_page_text,
-  computer, find).
+  cv-optimizer-jobfinder) de la persona -- si en la misma carpeta está
+  `analysis_{nombre}.json` (generado por ese mismo skill), lo usa para
+  priorizar los puestos que el candidato eligió. Requiere navegación real de
+  LinkedIn en Chrome (herramientas tipo claude-in-chrome: navigate,
+  get_page_text, computer, find).
 ---
 
 # Vacantes LinkedIn — Job Finder (búsqueda real + vacantes_{nombre}.json)
@@ -66,10 +68,21 @@ en ninguna sección) — verificalo siempre antes de entregar.
 
 - Ruta del **CV optimizado** (`.docx`, el que generó `cv-optimizer-jobfinder`
   en su Paso 7). Si el admin no la da, pedirla antes de empezar.
+- `analysis_{nombre}.json` (el que generó `cv-optimizer-jobfinder` en su
+  Paso 8) — **opcional pero recomendado**. Vive en la misma carpeta que el
+  CV optimizado, con el mismo `{nombre}` (ej. `cv_optimizado_andres.docx` +
+  `analysis_andres.json`), así que buscalo ahí automáticamente antes de
+  pedírselo al admin. Si no está (o el admin solo tiene el `.docx`), seguí
+  sin él — no es bloqueante.
 
-No hace falta el `cv_analysis.json` de la sesión ni el CV original — todo
-lo que necesita este skill sale del CV optimizado y de la navegación real
-en LinkedIn.
+El CV original no hace falta — pero a diferencia de antes, si existe
+`analysis_{nombre}.json` **sí lo usás**: su campo `roles_objetivo` trae los
+puestos a los que el candidato realmente quiere postular (ver Paso 2). El
+`.docx` solo no alcanza para esto porque `cv-optimizer-jobfinder` nunca
+inventa un título de cargo que el candidato no tuvo — si el puesto elegido
+es una aspiración distinta a su historial (ej. pivotar de "Project
+Coordinator" a "Product Manager"), el headline del CV optimizado no lo va
+a decir, pero `roles_objetivo` sí.
 
 ---
 
@@ -78,6 +91,12 @@ en LinkedIn.
 ```bash
 pandoc /ruta/al/CV_optimizado.docx -t plain
 ```
+
+Antes de seguir, buscá en la misma carpeta `analysis_{nombre}.json` (mismo
+`{nombre}` que el `.docx`, ej. `cv_optimizado_andres.docx` →
+`analysis_andres.json`). Si existe, parseá su campo `roles_objetivo` y
+guardá la lista de títulos — la usás en el Paso 2. Si no existe, seguí sin
+él.
 
 Obtené:
 - Nombre completo y título profesional / headline.
@@ -102,9 +121,19 @@ optimizado de nuevo, o el original.
 
 ## Paso 2 — Definir términos de búsqueda
 
-A partir del headline, los cargos ocupados y las habilidades del CV
-optimizado, construí 6-10 términos de búsqueda combinando:
+**Si tenés `analysis_{nombre}.json`:** los títulos de `roles_objetivo` son
+el punto de partida obligatorio de la lista de términos — en particular
+los que el candidato eligió (los que están primero en la lista, ver el
+skill `cv-optimizer-jobfinder`). Buscalos literalmente en LinkedIn aunque
+no coincidan con el headline actual del CV optimizado: el candidato
+declaró explícitamente que quiere postular a esos puestos, así que no es
+opcional incluirlos.
 
+A partir de `roles_objetivo` (si existe) y del headline, los cargos
+ocupados y las habilidades del CV optimizado, construí 6-10 términos de
+búsqueda combinando:
+
+- Los títulos de `roles_objetivo`, tal cual están escritos.
 - Títulos exactos del CV (si dice "Delivery Manager", buscá literalmente eso).
 - Sinónimos/variantes usadas en el mercado local (ej. "Project Manager",
   "Jefe de Proyecto", "PMO", "Gerente de Proyectos TI") — descubrilos

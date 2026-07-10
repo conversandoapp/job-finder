@@ -16,19 +16,32 @@ backend es solo el andamiaje: auth, estado de cada solicitud, almacenamiento
 de archivos y notificaciones.
 
 Journey de un candidato:
-1. Sube su CV en `/index.html` → queda en estado `pending`.
-2. El admin lo optimiza (a mano o con el skill `cv-optimizer-jobfinder`) y
-   sube el `.docx` + `cv_analysis.json` desde `/admin`.
-3. El candidato ve el resultado en `/resultado.html` (scores ATS, keywords,
+1. Sube su CV en `/index.html` → el backend extrae el texto y sugiere hasta
+   3 puestos por coincidencia de keywords (`POST /api/suggest-roles`, sin
+   IA); el candidato elige hasta 3 o le deja la elección al admin. Se crea
+   la sesión en estado `cv_status=pending`, el CV original va a Storage (+
+   Drive opcional) y se arma un `postulacion.zip` (CV + puestos elegidos)
+   que se adjunta a la notificación del admin.
+2. El admin lo optimiza (a mano o con el skill `cv-optimizer-jobfinder`,
+   que ya recibe los puestos elegidos por el candidato) y sube el `.docx` +
+   `cv_analysis.json` desde `/admin` → `cv_status=pending_review`.
+3. Backoffice revisa y aprueba/rechaza/reemplaza (`/backoffice`) →
+   `cv_status=ready` (o vuelve a `pending` si se rechaza, con una nota
+   opcional para el admin).
+4. El candidato ve el resultado en `/resultado.html` (scores ATS, keywords,
    roles objetivo, link de descarga) y pide "buscar vacantes".
-4. El admin arma la plataforma de vacantes (a mano o con el skill
-   `vacantes-linkedin-jobfinder`) y sube el `vacantes.json`.
-5. El candidato ve `/vacantes.html`, una plataforma tipo LinkedIn armada
+5. El admin arma la plataforma de vacantes (a mano o con el skill
+   `vacantes-linkedin-jobfinder`) y sube el `vacantes.json` →
+   `jobs_status=pending_review`; backoffice aprueba/rechaza/reemplaza igual
+   que con el CV → `jobs_status=ready`.
+6. El candidato ve `/vacantes.html`, una plataforma tipo LinkedIn armada
    100% a partir de ese JSON (cards, filtros, top 5, stats).
 
 No hay notificaciones push al candidato: las páginas hacen polling cada 10s
 mientras están abiertas, y se puede cerrar y volver más tarde con el mismo
-link.
+link. El candidato sí puede resetear su contraseña sin intervención del
+admin (`login.html` → "olvidé mi contraseña" → email de Supabase →
+`reset-password.html`).
 
 ---
 
@@ -51,31 +64,40 @@ link.
 
 ```
 job-finder/
-├── .claude/skills/              # skills de Claude Code (ver sección 8)
+├── .claude/skills/              # skills de Claude Code (ver sección 8) — no tocar desde acá
 │   ├── cv-optimizer-jobfinder/
 │   └── vacantes-linkedin-jobfinder/
+├── Dockerfile                    # imagen usada para el deploy real en Render
 ├── backend/
 │   ├── app.py                   # FastAPI: todos los endpoints + sirve el frontend
 │   ├── requirements.txt
 │   ├── .env.example
+│   ├── credentials/              # carpeta vacía (.gitkeep); resabio de un diseño
+│   │                              # anterior con credenciales en disco — hoy todo
+│   │                              # (token de Drive incluido) vive en Supabase
 │   ├── services/
-│   │   ├── db.py                # cliente Supabase (Postgres + Storage)
-│   │   ├── sessions.py          # CRUD de la tabla `sessions`
-│   │   ├── auth.py              # verifica JWT de Supabase, detecta admin
-│   │   ├── notifications.py     # email real + tabla `notifications`
-│   │   ├── storage_drive.py     # sube el CV original a Google Drive (opcional)
-│   │   └── drive_oauth.py       # flujo OAuth de conexión con Drive
+│   │   ├── db.py                 # cliente Supabase (Postgres + Storage), get/set_setting, upload/download/delete_file
+│   │   ├── sessions.py           # CRUD de la tabla `sessions`
+│   │   ├── auth.py               # verifica JWT de Supabase, detecta admin/backoffice
+│   │   ├── notifications.py      # email real + tabla `notifications`
+│   │   ├── storage_drive.py      # sube el CV original a Google Drive (opcional)
+│   │   ├── drive_oauth.py        # flujo OAuth de conexión con Drive
+│   │   ├── role_matcher.py       # sugiere puestos por keywords a partir del texto del CV (sin IA)
+│   │   ├── role_keywords.py      # diccionario de ~320 puestos + keywords que usa role_matcher.py
+│   │   └── packaging.py          # arma el postulacion.zip (CV original + puestos elegidos)
 │   ├── supabase/schema.sql      # DDL a correr una vez en el proyecto de Supabase
 │   └── schemas/                 # prompts manuales + JSON de ejemplo (fallback de los skills)
 └── frontend/                    # una página HTML + un .js por vista, sin build step
     ├── auth.js / auth.css       — cliente Supabase compartido, guards de sesión
-    ├── login.html / login.js    — signup + login de usuarios normales
+    ├── login.html / login.js    — signup + login de usuarios normales (incluye "olvidé mi contraseña")
+    ├── reset-password.html/.js  — completa el reset de contraseña (link que manda Supabase por email)
     ├── admin-login.html/.js     — login exclusivo de la cuenta admin
     ├── backoffice-login.html/.js — login exclusivo de cuentas backoffice
-    ├── index.html / app.js      — subir CV + ver solicitudes anteriores
+    ├── index.html / app.js      — subir CV (con sugerencia/selección de puestos) + ver solicitudes anteriores
     ├── resultado.html/.js       — ver análisis ATS + pedir vacantes
     ├── vacantes.html/.js/.css   — plataforma de vacantes (data-driven)
     ├── admin.html / admin.js    — panel admin
+    ├── admin.css                — estilos propios del panel admin
     ├── backoffice.html / backoffice.js — panel backoffice (revisa antes de que el candidato vea el CV/vacantes)
     └── styles.css               — tokens de diseño compartidos (color, tipografía, sombras)
 ```
@@ -101,9 +123,13 @@ carpeta + `request.json` en el filesystem local.
 | `cv_status` | `pending` \| `pending_review` \| `ready` \| `error` |
 | `jobs_status` | `not_requested` \| `pending` \| `pending_review` \| `ready` \| `error` |
 | `cv_original_path`, `cv_optimizado_path` | keys de objetos en el bucket `cv-files` |
+| `cv_zip_path` | key del `postulacion.zip` (CV original + `puestos_candidato.json`), armado por `services/packaging.py` |
 | `cv_drive_link` | link de Drive del CV original (si `DRIVE_ENABLED=true`) |
 | `cv_scores` (jsonb) | el `cv_analysis.json` que sube el admin — lo lee `resultado.js` |
 | `vacantes` (jsonb) | el `vacantes.json` que sube el admin — lo lee `vacantes.js` |
+| `roles_sugeridos` (jsonb) | hasta 3-5 puestos sugeridos por `role_matcher.py` (match por keywords, sin IA) al subir el CV — primer filtro automático, no reemplaza `cv_scores.roles_objetivo` |
+| `roles_elegidos` (jsonb) | puestos que eligió el candidato (orden de prioridad), o `[]` si `roles_modo="admin"` |
+| `roles_modo` | `candidato` (el usuario eligió puestos) \| `admin` (prefiere que el admin elija) |
 | `cv_review_note`, `jobs_review_note` | nota opcional que deja backoffice al rechazar (se limpia al reintentar/aprobar) |
 | `cv_requested_at/ready_at`, `jobs_requested_at/ready_at` | timestamps del flujo |
 
@@ -131,8 +157,8 @@ nunca una URL pública directa).
 |---|---|---|
 | `GET /api/config` | público | expone `SUPABASE_URL`/`SUPABASE_ANON_KEY` al frontend |
 | `GET /api/whoami` | usuario logueado | `{id, email, is_admin, is_backoffice}` |
-| `POST /api/analyze` | usuario | crea la sesión, sube el CV original a Storage (+ Drive opcional), notifica al admin |
-| `POST /api/suggest-roles` | usuario | filtro rápido de puestos sugeridos, sin persistir nada |
+| `POST /api/suggest-roles` | usuario | extrae texto del CV subido y devuelve hasta 3 puestos sugeridos por match de keywords (`role_matcher.py`), sin persistir nada — usado antes de confirmar la subida |
+| `POST /api/analyze` | usuario | crea la sesión, sube el CV original a Storage (+ Drive opcional), arma `postulacion.zip` (CV + puestos elegidos, `services/packaging.py`), notifica al admin con ese zip adjunto, y guarda `roles_sugeridos` |
 | `GET /api/my-sessions` | usuario | lista sus propias sesiones |
 | `GET /api/status/{id}` | dueño o backoffice | estado crudo de la sesión |
 | `GET /api/result/{id}` | dueño o backoffice | `cv_scores` una vez `cv_status=ready` (o en `pending_review`, para que backoffice previsualice) |
@@ -142,12 +168,15 @@ nunca una URL pública directa).
 | `GET /api/admin/requests` | admin | todas las sesiones (para `/admin`) |
 | `GET /api/admin/notifications` | admin | historial de avisos |
 | `GET /api/admin/download/original/{id}` | admin | descarga el CV original |
+| `GET /api/admin/download/zip/{id}` | admin | descarga `postulacion.zip` (CV original + `puestos_candidato.json`) |
 | `GET /api/admin/drive/authorize` | admin | arma la URL de consentimiento de Google (ver sección 7) |
 | `GET /api/admin/drive/oauth2callback` | Google (redirect) | intercambia el `code`, guarda el token |
 | `POST /api/admin/{id}/cv` | admin | sube CV optimizado + `cv_analysis.json`, marca `cv_status=pending_review` (espera aprobación de backoffice) |
+| `DELETE /api/admin/{id}/cv` | admin | borra el CV optimizado + `cv_scores` subidos, vuelve la sesión a `cv_status=pending` (para corregir un error de carga) |
 | `POST /api/admin/{id}/vacantes` | admin | sube `vacantes.json`, marca `jobs_status=pending_review` |
+| `DELETE /api/admin/{id}/vacantes` | admin | borra `vacantes`, vuelve `jobs_status=not_requested` |
 | `GET /api/backoffice/requests` | backoffice | todas las sesiones (para `/backoffice`) |
-| `POST /api/backoffice/{id}/cv/approve` \| `/reject` \| `/replace` | backoffice | aprueba (`cv_status=ready`), rechaza (vuelve a `pending`, nota opcional) o reemplaza (sube su propio archivo y aprueba) el CV pendiente de revisión |
+| `POST /api/backoffice/{id}/cv/approve` \| `/reject` \| `/replace` | backoffice | aprueba (`cv_status=ready`), rechaza (vuelve a `pending`, nota opcional, notifica al admin) o reemplaza (sube su propio archivo y aprueba) el CV pendiente de revisión |
 | `POST /api/backoffice/{id}/vacantes/approve` \| `/reject` \| `/replace` | backoffice | análogo para `vacantes.json` |
 | `/` (StaticFiles) | público | sirve todo `frontend/` |
 
@@ -177,6 +206,20 @@ nunca una URL pública directa).
 - **`drive_oauth.py`** — arma la URL de consentimiento OAuth y canjea el
   `code` por credenciales; guarda todo en `app_settings` (no en disco, ver
   sección 7).
+- **`role_matcher.py`** — extrae texto de un CV (PDF/DOCX/TXT, sin OCR ni
+  IA) y lo puntúa contra `role_keywords.py` (presencia de keywords, no
+  frecuencia) para sugerir hasta N puestos. Es un filtro rápido de UX
+  (`POST /api/suggest-roles`, y también se guarda en `roles_sugeridos` al
+  llamar `POST /api/analyze`) — no reemplaza el análisis fino que hace el
+  admin/skill en `cv_scores.roles_objetivo`.
+- **`role_keywords.py`** — diccionario de ~320 puestos: un núcleo de ~20
+  curados a mano + una "cola larga" generada a partir de keywords por
+  categoría. Es el único archivo que hay que tocar para agregar puestos
+  nuevos al matcher (ver comentario al inicio del archivo).
+- **`packaging.py`** — arma `postulacion.zip` (CV original +
+  `puestos_candidato.json` con `{modo, roles}`) para que al admin le
+  lleguen juntos el CV y los puestos elegidos por el candidato, tanto por
+  email adjunto como por `GET /api/admin/download/zip/{id}`.
 
 ---
 
@@ -188,13 +231,14 @@ compartido, con `requireAuth`/`requireAdmin`/`requireBackoffice`/`authFetch`/
 
 | Página | JS | Qué muestra |
 |---|---|---|
-| `index.html` | `app.js` | form de subida de CV (dropzone) + solicitudes anteriores |
+| `index.html` | `app.js` | form de subida de CV (dropzone); llama a `POST /api/suggest-roles` para ofrecer hasta 3 puestos sugeridos, el candidato elige hasta 3 o deja que el admin elija (`dejar_eleccion`); lista de solicitudes anteriores |
 | `resultado.html` | `resultado.js` | polling de `cv_status`; scores ATS, keywords, debilidades, roles, botón de descarga, CTA "buscar vacantes" (si es backoffice previsualizando un `pending_review`, muestra un banner y oculta la CTA) |
 | `vacantes.html` | `vacantes.js` | polling de `jobs_status`; plataforma data-driven (sidebar por categoría, stats, top 5, cards, filtros) |
-| `login.html` | `login.js` | signup/login de candidatos (split-screen con panel de marca) |
+| `login.html` | `login.js` | signup/login de candidatos (split-screen con panel de marca) + "olvidé mi contraseña" (`resetPasswordForEmail`, manda email de Supabase) |
+| `reset-password.html` | `reset-password.js` | completa el reset: detecta el token de recovery en el hash de la URL (evento `PASSWORD_RECOVERY` de Supabase) y pide la nueva contraseña |
 | `admin-login.html` | `admin-login.js` | login exclusivo del admin |
 | `backoffice-login.html` | `backoffice-login.js` | login exclusivo de cuentas backoffice |
-| `admin.html` | `admin.js` | solicitudes pendientes/pasadas, formularios de subida, notificaciones, botón "Conectar Google Drive" |
+| `admin.html` | `admin.js` | solicitudes pendientes/pasadas (colapsadas por default), formularios de subida (incluye borrar CV/vacantes ya subidos), descarga de `postulacion.zip`, notificaciones, botón "Conectar Google Drive" |
 | `backoffice.html` | `backoffice.js` | "Por revisar" (aprobar/rechazar/reemplazar CV y vacantes en `pending_review`) + "Todas las solicitudes" (solo lectura) |
 
 `styles.css` centraliza los tokens de diseño (paleta de azules, sombras,
@@ -231,21 +275,32 @@ Automatizan lo que `backend/schemas/prompt_para_claude_*.md` documenta como
 proceso manual (copiar/pegar prompts en el chat web de Claude). Ambos son
 **project-scoped**: Claude Code los detecta solo al abrir esta carpeta.
 
-- **`cv-optimizer-jobfinder`** — input: CV original (PDF/DOCX). Extrae texto,
-  identifica roles objetivo, puntúa ATS contra el rol #1 (mejor match),
-  reescribe el CV sin inventar información, genera el `.docx` optimizado +
-  `cv_analysis.json` (esquema mínimo: `ats_score_original`,
+- **`cv-optimizer-jobfinder`** — input ideal: `postulacion.zip` (CV original +
+  `puestos_candidato.json` con los puestos elegidos por el candidato,
+  descargable desde `/admin` — ver `GET /api/admin/download/zip/{id}` y
+  `services/packaging.py`); también acepta un PDF/DOCX suelto. Extrae texto,
+  identifica roles objetivo (usando los puestos elegidos si vinieron en el
+  zip), puntúa ATS contra el rol #1, reescribe el CV sin inventar
+  información, y genera **tres archivos**: `cv_optimizado_{nombre}.docx`,
+  `analysis_{nombre}.json` (esquema mínimo: `ats_score_original`,
   `ats_score_optimizado`, `roles_objetivo`, `keywords_agregados`,
-  `debilidades`).
-- **`vacantes-linkedin-jobfinder`** — input: el CV **optimizado**. Navega
-  LinkedIn Jobs en Chrome (herramientas tipo claude-in-chrome), clasifica
-  vacantes en 5 categorías (`alta_relevancia`, `ventaja_interna`,
-  `remoto_latam`, `media`, `especializado`) y genera `vacantes.json`
-  (esquema mínimo: `candidato.nombre`, `stats`, `top5_ids`,
-  `notas_estrategia`, `vacantes[]`).
+  `debilidades` — son las 5 claves que valida `POST /api/admin/{id}/cv`) y
+  `cv_optimizado_{nombre}.zip` (los dos anteriores juntos, para pasarle
+  directo al otro skill). El admin sube a mano los dos archivos sueltos
+  (no el zip) a `/admin`.
+- **`vacantes-linkedin-jobfinder`** — input ideal: el
+  `cv_optimizado_{nombre}.zip` que genera el skill anterior (también acepta
+  el `.docx` suelto). Navega LinkedIn Jobs en Chrome (herramientas tipo
+  claude-in-chrome), clasifica vacantes en 5 categorías
+  (`alta_relevancia`, `ventaja_interna`, `remoto_latam`, `media`,
+  `especializado`) y genera `vacantes.json` (esquema mínimo:
+  `candidato.nombre`, `stats`, `top5_ids`, `notas_estrategia`,
+  `vacantes[]`), que el admin sube a mano en `POST /api/admin/{id}/vacantes`.
 
 Ninguno de los dos sube archivos a la API directamente — el admin sigue
-subiéndolos a mano desde `/admin`, solo que ya vienen listos.
+subiéndolos a mano desde `/admin`, solo que ya vienen listos. Ambos
+esperan aprobación de backoffice (`pending_review`) antes de que el
+candidato los vea.
 
 ---
 
@@ -255,7 +310,8 @@ Real: **Render** (Docker, auto-deploy en cada push). Alternativa
 documentada pero no usada: Google Cloud Run. Ver `DEPLOY.md` para el
 paso a paso completo y la tabla de variables de entorno
 (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
-`ADMIN_EMAIL`, `NOTIFY_EMAIL_*`, `DRIVE_*`).
+`ADMIN_EMAIL`, `BACKOFFICE_EMAILS`, `APP_BASE_URL`, `NOTIFY_EMAIL_*`,
+`DRIVE_*`).
 
 Como todo el estado vive en Supabase (no en el filesystem del contenedor),
 no hace falta ningún disco persistente ni límite de instancias — a
@@ -287,3 +343,9 @@ filesystem local de una sola instancia.
   hecho, solo les dan de comer el JSON.
 - **Sin notificación push al candidato:** decisión explícita del MVP; el
   candidato vuelve a consultar su link (o su lista de solicitudes).
+- **Sugerencia de roles por keywords, no por IA:** `role_matcher.py` es un
+  matcher determinístico (sin llamadas a ningún modelo) para poder
+  ofrecerle al candidato una sugerencia instantánea de puestos apenas sube
+  el CV, sin costo ni latencia de IA. Es deliberadamente un filtro
+  "grueso" — el análisis fino que ve el candidato sigue viniendo de
+  `cv_scores.roles_objetivo`, armado por el admin/skill con Claude.

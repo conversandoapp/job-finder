@@ -98,6 +98,7 @@ Las mismas que en `backend/.env.example`, cargadas en la pestaña
 | `SUPABASE_JWT_SECRET` | No | vacío en proyectos nuevos de Supabase |
 | `ADMIN_EMAIL` | Sí | |
 | `BACKOFFICE_EMAILS` | No | lista separada por coma; el admin ya tiene este permiso automáticamente |
+| `APP_BASE_URL` | No | URL pública del servicio, usada en los links de los emails de notificación; default `https://job-finder-scwk.onrender.com` |
 | `NOTIFY_EMAIL_ENABLED` | No | `false` si no configurás email |
 | `NOTIFY_EMAIL_APP_PASSWORD` | No | secreta |
 | `DRIVE_ENABLED` | No | `false` si no configurás Drive |

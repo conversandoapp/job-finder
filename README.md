@@ -12,29 +12,45 @@ entrar a su link cuando quiere consultar si ya está listo.
 ## Flujo
 
 0. El usuario se crea una cuenta él mismo en `/login.html` (email + contraseña,
-   vía Supabase). Vos entrás a `/admin-login` con tu única cuenta admin.
-1. Usuario entra a `/` (`index.html`), sube su CV → ve "estamos procesando,
-   hasta 24h" y un link para volver más tarde.
-2. Vos recibís un aviso (panel admin + email si lo activás) con el CV.
-3. Entrás a `/admin`, le pegás el CV a Claude con el prompt de
-   `backend/schemas/prompt_para_claude_cv_analysis.md` y te devuelve un
-   `cv_analysis.json` (scores ATS, roles, keywords, debilidades) + el texto
-   del CV reescrito para pegar en Word. Subís el `.docx` que armaste + ese
-   JSON desde el panel — nada de campos sueltos para llenar a mano.
-4. Usuario vuelve a su link (`/resultado.html?session=...`) y ve su análisis
+   vía Supabase; también puede resetear su contraseña ahí). Vos entrás a
+   `/admin-login` con tu única cuenta admin. Si además tenés a alguien
+   revisando tus cargas antes de que el candidato las vea, esa persona entra
+   por `/backoffice-login` (ver "backoffice" más abajo).
+1. Usuario entra a `/` (`index.html`), sube su CV. Antes de confirmar, el
+   backend le sugiere hasta 3 puestos por coincidencia de keywords (sin IA,
+   ver `services/role_matcher.py`) y el usuario elige hasta 3 (o le deja la
+   elección al admin) → ve "estamos procesando, hasta 24h" y un link para
+   volver más tarde.
+2. Vos recibís un aviso (panel admin + email si lo activás) con el CV **y**
+   un `postulacion.zip` adjunto (CV + los puestos que eligió el candidato).
+3. Entrás a `/admin` y optimizás el CV — a mano (le pegás el CV a Claude con
+   el prompt de `backend/schemas/prompt_para_claude_cv_analysis.md`, que te
+   devuelve un `cv_analysis.json` con scores ATS, roles, keywords y
+   debilidades + el texto del CV reescrito) o con el skill
+   `cv-optimizer-jobfinder` (le das de comer el `postulacion.zip` que
+   descargás del panel y te devuelve los dos archivos ya listos). Subís el
+   `.docx` + ese JSON desde el panel — nada de campos sueltos para llenar a
+   mano. Queda en estado "pendiente de revisión".
+4. Si configuraste backoffice, esa cuenta entra a `/backoffice` y
+   aprueba, rechaza (con una nota opcional) o reemplaza lo que subiste. Si
+   no hay backoffice configurado, tu propia cuenta admin puede aprobar sus
+   propias cargas.
+5. Usuario vuelve a su link (`/resultado.html?session=...`) y ve su análisis
    + descarga el CV optimizado. También ve un listado de "tus solicitudes
    anteriores" en `/index.html` por si perdió el link.
-5. Usuario aprieta "Buscar vacantes" → te avisa de nuevo.
-6. Armás el `vacantes.json` con ayuda de Claude (ver
-   `backend/schemas/prompt_para_claude_vacantes.md`) y lo subís desde el panel.
-7. Usuario vuelve a `/vacantes.html?session=...` y ve la plataforma de
+6. Usuario aprieta "Buscar vacantes" → te avisa de nuevo.
+7. Armás el `vacantes.json` con ayuda de Claude (ver
+   `backend/schemas/prompt_para_claude_vacantes.md`) o con el skill
+   `vacantes-linkedin-jobfinder` (le das de comer el CV optimizado) y lo
+   subís desde el panel. Pasa por la misma revisión de backoffice que el CV.
+8. Usuario vuelve a `/vacantes.html?session=...` y ve la plataforma de
    vacantes ya armada — filtros, cards, top 5, todo generado automáticamente
    a partir de ese JSON (vos nunca escribís HTML).
 
 Cada sesión queda asociada al `user_id` de Supabase del usuario que subió el
 CV. El backend verifica en cada request que quien pide un resultado sea el
-dueño de esa sesión (o vos, el admin) — nadie puede ver el análisis de otra
-persona solo adivinando el link.
+dueño de esa sesión (o vos, el admin, o backoffice) — nadie puede ver el
+análisis de otra persona solo adivinando el link.
 
 ## Configurar Supabase (obligatorio, una sola vez)
 
@@ -183,19 +199,28 @@ admin), no un requisito para que el sistema funcione.
 
 ## Estructura
 
+> Mapa completo (modelo de datos, endpoints, servicios) en `ARCHITECTURE.md`.
+> Esto es solo el árbol de carpetas.
+
 ```
 job-finder/
+├── .claude/skills/              # skills de Claude Code que automatizan los pasos manuales del admin
+│   ├── cv-optimizer-jobfinder/
+│   └── vacantes-linkedin-jobfinder/
 ├── backend/
-│   ├── app.py                 # FastAPI: todos los endpoints + sirve el frontend
+│   ├── app.py                  # FastAPI: todos los endpoints + sirve el frontend
 │   ├── requirements.txt
 │   ├── .env.example
 │   ├── services/
-│   │   ├── db.py               # cliente de Supabase (Postgres + Storage)
-│   │   ├── sessions.py         # estado de cada solicitud (tabla `sessions`)
-│   │   ├── auth.py             # verifica JWT de Supabase, detecta admin
-│   │   ├── notifications.py    # email real + tabla `notifications`
-│   │   ├── storage_drive.py    # Google Drive real o fallback sin Drive
-│   │   └── drive_oauth.py      # flujo OAuth de conexión con Drive
+│   │   ├── db.py                # cliente de Supabase (Postgres + Storage)
+│   │   ├── sessions.py          # estado de cada solicitud (tabla `sessions`)
+│   │   ├── auth.py              # verifica JWT de Supabase, detecta admin/backoffice
+│   │   ├── notifications.py     # email real + tabla `notifications`
+│   │   ├── storage_drive.py     # Google Drive real o fallback sin Drive
+│   │   ├── drive_oauth.py       # flujo OAuth de conexión con Drive
+│   │   ├── role_matcher.py      # sugiere puestos por keywords a partir del CV (sin IA)
+│   │   ├── role_keywords.py     # diccionario de puestos + keywords que usa role_matcher.py
+│   │   └── packaging.py         # arma el postulacion.zip (CV + puestos elegidos)
 │   ├── supabase/
 │   │   └── schema.sql          # correr una vez en el SQL Editor del proyecto
 │   └── schemas/
@@ -206,12 +231,15 @@ job-finder/
 │       └── prompt_para_claude_vacantes.md
 └── frontend/                   # HTML/CSS/JS plano, sin build step
     ├── auth.js / auth.css               — cliente Supabase compartido, guards de sesión
-    ├── login.html / login.js            — signup + login de usuarios normales
+    ├── login.html / login.js            — signup + login de usuarios normales (+ "olvidé mi contraseña")
+    ├── reset-password.html / .js        — completa el reset de contraseña
     ├── admin-login.html / admin-login.js — login exclusivo de la cuenta admin
-    ├── index.html / app.js              — subir CV + ver solicitudes anteriores
+    ├── backoffice-login.html / .js      — login exclusivo de cuentas backoffice
+    ├── index.html / app.js              — subir CV (con sugerencia/selección de puestos) + solicitudes anteriores
     ├── resultado.html / resultado.js    — ver análisis + pedir vacantes
     ├── vacantes.html / vacantes.js      — plataforma de vacantes (data-driven)
-    └── admin.html / admin.js            — panel admin
+    ├── admin.html / admin.js            — panel admin
+    └── backoffice.html / backoffice.js  — panel de revisión (aprueba/rechaza/reemplaza antes de que el candidato vea el CV/vacantes)
 ```
 
 ## Por qué estas decisiones
@@ -249,3 +277,9 @@ job-finder/
   volver a consultar su link (o la lista de "solicitudes anteriores" en
   `index.html`, ahora que tiene cuenta). La página hace polling automático
   cada 10s mientras está abierta, pero no hay ningún aviso si la cierra.
+- **Sugerencia de puestos por keywords, no por IA:** al subir el CV se
+  ofrece una sugerencia instantánea de hasta 3 puestos (`services/
+  role_matcher.py` + `role_keywords.py`, match determinístico por
+  keywords) para que el usuario elija sin esperar a que vos lo analices.
+  No reemplaza tu análisis: `cv_analysis.json` sigue siendo la fuente de
+  verdad que ve el candidato en `/resultado.html`.

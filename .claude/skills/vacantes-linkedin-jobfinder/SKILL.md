@@ -8,10 +8,11 @@ description: >
   solicitud de búsqueda de empleo. Se activa con frases como "arma la
   plataforma de vacantes", "busca vacantes de LinkedIn para este candidato",
   "generame el vacantes.json", "procesa esta solicitud de vacantes". El input
-  es la ruta del CV **optimizado** (.docx, el que generó el skill
-  cv-optimizer-jobfinder) de la persona. Requiere navegación real de LinkedIn
-  en Chrome (herramientas tipo claude-in-chrome: navigate, get_page_text,
-  computer, find).
+  ideal es `cv_optimizado_{nombre}.zip` (CV optimizado + analysis.json,
+  generado por el skill cv-optimizer-jobfinder), pero también acepta el
+  `.docx` del CV optimizado suelto -- el skill detecta el formato solo.
+  Requiere navegación real de LinkedIn en Chrome (herramientas tipo
+  claude-in-chrome: navigate, get_page_text, computer, find).
 ---
 
 # Vacantes LinkedIn — Job Finder (búsqueda real + vacantes_{nombre}.json)
@@ -32,7 +33,8 @@ del postulante en minúsculas y sin tildes** como parte del nombre:
 | `vacantes_{nombre}.json` | JSON | Vacantes rankeadas con stats, Top 5 y notas de estrategia |
 
 Ejemplo: postulante "Andrés García" → `vacantes_andres.json`.
-El archivo se guarda en la misma carpeta que el CV optimizado.
+El archivo se guarda en el mismo directorio que el archivo de entrada (ver
+"Directorio de salida" en el Paso 1).
 El admin lo sube manualmente desde `/admin`, sección "Subir vacantes.json".
 
 **A diferencia de un generador de informe HTML**, acá no se genera ningún
@@ -64,22 +66,50 @@ en ninguna sección) — verificalo siempre antes de entregar.
 
 ## Input requerido
 
-- Ruta del **CV optimizado** (`.docx`, el que generó `cv-optimizer-jobfinder`
-  en su Paso 7). Si el admin no la da, pedirla antes de empezar.
+Pedí al admin la ruta del archivo si no la dio. El input esperado es
+`cv_optimizado_{nombre}.zip` (el que genera `cv-optimizer-jobfinder` en su
+Paso 9), pero también acepta el `.docx` del CV optimizado suelto para usos
+ad hoc.
 
-No hace falta el `cv_analysis.json` de la sesión ni el CV original — todo
-lo que necesita este skill sale del CV optimizado y de la navegación real
-en LinkedIn.
+El CV original no hace falta en ningún caso — no es un input de este skill.
 
 ---
 
 ## Paso 1 — Extraer el contenido del CV optimizado
 
+**Caso A — el admin dio un `.zip` (`cv_optimizado_{nombre}.zip`):**
+
+1. Descomprimilo a una carpeta temporal:
+   ```bash
+   python3 -m zipfile -e /ruta/a/cv_optimizado_andres.zip /tmp/cv_extraido/
+   ```
+2. Adentro vas a encontrar dos archivos fijos (los pone
+   `cv-optimizer-jobfinder` en su Paso 9): `cv_optimizado_{nombre}.docx` y
+   `analysis_{nombre}.json`.
+3. Extraé el texto del CV:
+   ```bash
+   pandoc /tmp/cv_extraido/cv_optimizado_{nombre}.docx -t plain
+   ```
+4. Parseá `analysis_{nombre}.json` y guardá su campo `roles_objetivo`
+   (lista de títulos, ya en orden de prioridad cuando el candidato eligió
+   puestos) — lo usás en el Paso 2.
+
+**Caso B — el admin dio el `.docx` suelto (sin zip):**
+
 ```bash
 pandoc /ruta/al/CV_optimizado.docx -t plain
 ```
 
-Obtené:
+No hay `roles_objetivo` disponible: seguí sin él (Paso 2 se apoya solo en
+lo que infiera del CV), salvo que el admin te haya pasado igual el
+`analysis_{nombre}.json` por separado o te haya mencionado puestos
+objetivo en el chat.
+
+**Directorio de salida:** `vacantes_{nombre}.json` (Paso 7) se guarda en
+el directorio donde está el archivo que te dio el admin (el zip o el
+`.docx` suelto) — no en la carpeta temporal de extracción del Caso A.
+
+**En ambos casos**, obtené del texto extraído:
 - Nombre completo y título profesional / headline.
 - Ubicación (ciudad/país) — define el radio de búsqueda local en LinkedIn.
 - Resumen profesional y años totales de experiencia.
@@ -102,9 +132,19 @@ optimizado de nuevo, o el original.
 
 ## Paso 2 — Definir términos de búsqueda
 
-A partir del headline, los cargos ocupados y las habilidades del CV
-optimizado, construí 6-10 términos de búsqueda combinando:
+**Si tenés `analysis_{nombre}.json`:** los títulos de `roles_objetivo` son
+el punto de partida obligatorio de la lista de términos — en particular
+los que el candidato eligió (los que están primero en la lista, ver el
+skill `cv-optimizer-jobfinder`). Buscalos literalmente en LinkedIn aunque
+no coincidan con el headline actual del CV optimizado: el candidato
+declaró explícitamente que quiere postular a esos puestos, así que no es
+opcional incluirlos.
 
+A partir de `roles_objetivo` (si existe) y del headline, los cargos
+ocupados y las habilidades del CV optimizado, construí 6-10 términos de
+búsqueda combinando:
+
+- Los títulos de `roles_objetivo`, tal cual están escritos.
 - Títulos exactos del CV (si dice "Delivery Manager", buscá literalmente eso).
 - Sinónimos/variantes usadas en el mercado local (ej. "Project Manager",
   "Jefe de Proyecto", "PMO", "Gerente de Proyectos TI") — descubrilos
@@ -198,7 +238,7 @@ Para cada vacante, 2-4 líneas que:
 
 ## Paso 7 — Generar `vacantes_{nombre}.json`
 
-Escribí, en la misma carpeta del CV optimizado, el archivo
+Escribí, en el directorio de salida definido en el Paso 1, el archivo
 `vacantes_{nombre}.json` (donde `{nombre}` es el primer nombre del postulante
 en minúsculas y sin tildes, ej: `vacantes_andres.json`) con **exactamente**
 este esquema (sin `session_id`, `generado_el`, `candidato.cargo_objetivo`
@@ -252,7 +292,7 @@ Reglas:
 - `id` único por vacante (`job_001`, `job_002`, ...).
 
 **Nombre del archivo:** `vacantes_{nombre}.json` (primer nombre en minúsculas
-y sin tildes), guardado en la misma carpeta que el CV optimizado.
+y sin tildes), guardado en el directorio de salida del Paso 1.
 Ejemplo: "Andrés García" → `vacantes_andres.json`.
 
 ---

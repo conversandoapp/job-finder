@@ -10,7 +10,9 @@ description: >
   "puntúa este CV", "procesa esta solicitud de CV". El input ideal es
   `postulacion.zip` (CV + puestos elegidos por el candidato, descargado desde
   `/admin`), pero también acepta un PDF o Word (.docx) suelto -- el skill
-  detecta el formato solo.
+  detecta el formato solo. Además de los dos outputs sueltos, genera
+  `cv_optimizado_{nombre}.zip` (ambos archivos juntos) para pasárselo directo
+  al skill `vacantes-linkedin-jobfinder`.
 ---
 
 # CV Optimizer — Job Finder (scoring ATS + outputs con nombre del postulante)
@@ -23,7 +25,7 @@ obligatorios** listos para subir al panel admin.
 
 ## Outputs obligatorios
 
-Este skill genera exactamente **dos archivos**, usando el **primer nombre del
+Este skill genera **tres archivos**, usando el **primer nombre del
 postulante en minúsculas** como parte del nombre (por ejemplo, si el
 postulante se llama "Andrés García", `{nombre}` = `andres`):
 
@@ -31,9 +33,13 @@ postulante se llama "Andrés García", `{nombre}` = `andres`):
 |---|---|---|
 | `cv_optimizado_{nombre}.docx` | Word (.docx) | CV mejorado, ATS-friendly, listo para subir |
 | `analysis_{nombre}.json` | JSON | Análisis ATS con scores, roles, keywords y debilidades |
+| `cv_optimizado_{nombre}.zip` | ZIP | Los dos anteriores juntos, para pasarle al skill `vacantes-linkedin-jobfinder` |
 
-Ambos se guardan en el mismo directorio que el CV de entrada.
-El admin los sube manualmente desde `/admin`, sección "Subir CV optimizado".
+Los tres se guardan en el mismo directorio que el archivo de entrada.
+
+El admin sube manualmente a `/admin`, sección "Subir CV optimizado", **los
+dos archivos sueltos** (`.docx` + `.json`) — el endpoint no acepta el zip,
+que es solo para el handoff entre skills (ver Paso 9).
 
 ## Por qué el JSON tiene este esquema exacto
 
@@ -226,7 +232,7 @@ confirmación. Clasificá cada mejora posible en una de estas dos categorías:
 - Agregar sección de Idiomas (si no están mencionados en ningún lado)
 
 Los ítems ❌ se reportan en `debilidades` del JSON (ver Paso 8) y se listan
-en el resumen final del chat (ver Paso 9). **No interrumpas el proceso para
+en el resumen final del chat (ver Paso 10). **No interrumpas el proceso para
 pedir confirmación del plan** — aplicá todo lo posible y avanzá.
 
 ---
@@ -356,9 +362,38 @@ Reglas:
 
 ---
 
-## Paso 9 — Reportar en el chat
+## Paso 9 — Empaquetar en `cv_optimizado_{nombre}.zip`
 
-Después de generar ambos archivos, reportá:
+Además de los dos archivos sueltos, empaquetalos juntos en un tercer
+archivo para que el admin pueda pasárselo de una sola vez al skill
+`vacantes-linkedin-jobfinder` (que ahora lo espera como input, ver su
+`SKILL.md`):
+
+```bash
+cd /directorio/de/salida
+python3 -c "
+import zipfile
+with zipfile.ZipFile('cv_optimizado_andres.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
+    zf.write('cv_optimizado_andres.docx')
+    zf.write('analysis_andres.json')
+"
+```
+
+Reglas:
+- El zip contiene **solo** esos dos archivos, con sus nombres tal cual
+  (`cv_optimizado_{nombre}.docx` y `analysis_{nombre}.json`) — el skill de
+  vacantes los busca por esos nombres exactos adentro del zip.
+- Se llama `cv_optimizado_{nombre}.zip` (mismo `{nombre}` que los otros
+  dos) y se guarda en el mismo directorio de salida.
+- Este zip **no** se sube a `/admin` — el panel sigue esperando los dos
+  archivos sueltos por separado (ver "Outputs obligatorios" arriba). Es
+  exclusivamente para el handoff al siguiente skill.
+
+---
+
+## Paso 10 — Reportar en el chat
+
+Después de generar los tres archivos, reportá:
 
 ### 🎯 Puesto contra el que se calculó el score
 Una línea aclarando el origen: "El score se calculó contra '<rol #1>', el
@@ -374,13 +409,16 @@ necesitaría el candidato para poder aplicarlos.
 
 ### 📎 Archivos generados y próximo paso
 
-Los dos outputs generados son:
+Los archivos generados son:
 - `cv_optimizado_{nombre}.docx` — CV optimizado en Word, ATS-friendly
 - `analysis_{nombre}.json` — Análisis ATS con scores, roles, keywords y debilidades
+- `cv_optimizado_{nombre}.zip` — los dos anteriores juntos, para el skill de vacantes
 
-Recordale al admin que todavía tiene que subir **ambos archivos** a mano desde
-`/admin`, en la tarjeta de la solicitud correspondiente, sección
-"Subir CV optimizado" — este skill no llama a la API directamente.
+Recordale al admin que todavía tiene que subir **los dos archivos sueltos**
+(`.docx` + `.json`, no el zip) a mano desde `/admin`, en la tarjeta de la
+solicitud correspondiente, sección "Subir CV optimizado" — este skill no
+llama a la API directamente. El zip se lo puede dar directo al skill
+`vacantes-linkedin-jobfinder` para buscar las vacantes.
 
 ---
 

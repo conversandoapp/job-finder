@@ -54,7 +54,7 @@ function formatDate(iso) {
 function hasUnsavedInput() {
   const listEl = document.getElementById("review-list");
   const fields = listEl.querySelectorAll(
-    ".cv-reject-form textarea, .cv-replace-form input, .jobs-reject-form textarea, .jobs-replace-form input"
+    ".cv-reject-form textarea, .cv-replace-form input, .cv-replace-separate-form input, .jobs-reject-form textarea, .jobs-replace-form input"
   );
   for (const el of fields) {
     if (el.type === "file") {
@@ -221,16 +221,16 @@ function wireReviewBlock(block, req, cssPrefix, apiPath) {
     }
   });
 
-  replaceForm.addEventListener("submit", async (e) => {
+  async function submitReplace(e, form, closeModal) {
     e.preventDefault();
     if (!confirm(`Esto reemplaza ${label} del admin con lo tuyo y lo aprueba directo. ¿Continuar?`)) return;
-    const msgEl = replaceForm.querySelector(".form-msg");
+    const msgEl = form.querySelector(".form-msg");
     msgEl.textContent = "";
     msgEl.className = "form-msg";
     const fd = new FormData();
-    fd.append("file", replaceForm.file.files[0]);
-    if (replaceForm.scores_file) {
-      fd.append("scores_file", replaceForm.scores_file.files[0]);
+    fd.append("file", form.file.files[0]);
+    if (form.scores_file && form.scores_file.files[0]) {
+      fd.append("scores_file", form.scores_file.files[0]);
     }
     try {
       const res = await JFAuth.authFetch(`/api/backoffice/${req.session_id}/${apiPath}/replace`, { method: "POST", body: fd });
@@ -240,12 +240,24 @@ function wireReviewBlock(block, req, cssPrefix, apiPath) {
       }
       msgEl.textContent = "✅ Reemplazado y aprobado.";
       msgEl.className = "form-msg ok";
+      if (closeModal) closeModal.hidden = true;
       setTimeout(() => loadAll(true), 800);
     } catch (err) {
       msgEl.textContent = "❌ " + err.message;
       msgEl.className = "form-msg err";
     }
-  });
+  }
+
+  replaceForm.addEventListener("submit", (e) => submitReplace(e, replaceForm, null));
+
+  const separateModal = block.querySelector(`.${cssPrefix}-replace-separate-modal`);
+  if (separateModal) {
+    const separateForm = block.querySelector(`.${cssPrefix}-replace-separate-form`);
+    block.querySelector(`.${cssPrefix}-replace-separate-open`).addEventListener("click", () => { separateModal.hidden = false; });
+    block.querySelector(`.${cssPrefix}-replace-separate-close`).addEventListener("click", () => { separateModal.hidden = true; });
+    separateModal.addEventListener("click", (e) => { if (e.target === separateModal) separateModal.hidden = true; });
+    separateForm.addEventListener("submit", (e) => submitReplace(e, separateForm, separateModal));
+  }
 }
 
 document.getElementById("refresh-review-btn").addEventListener("click", () => loadAll(true));

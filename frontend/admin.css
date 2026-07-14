@@ -23,6 +23,14 @@
 .review-block h3 { font-size: 14px; margin: 0 0 10px; }
 .review-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+.btn-link { background: none; border: none; color: #2563eb; text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px 0; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal-overlay[hidden] { display: none; }
+.modal-box { background: #fff; border-radius: var(--radius-sm); padding: 20px; max-width: 420px; width: 90%; box-shadow: var(--shadow-md); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-head h4 { margin: 0; font-size: 15px; }
+.modal-close { background: none; border: none; font-size: 16px; cursor: pointer; color: var(--text-muted); }
+
 .notif-item {
   background: white; border: 1px solid var(--gray-border); border-radius: var(--radius-sm);
   padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow-xs);

@@ -83,13 +83,29 @@
         <div class="form-msg"></div>
       </form>
       <form class="cv-replace-form" style="display:none; margin-top:12px;">
-        <label class="field-label">Archivo .docx/.pdf optimizado (reemplaza el del admin)</label>
-        <input type="file" name="file" accept=".docx,.doc,.pdf" required />
-        <label class="field-label">cv_analysis.json</label>
-        <input type="file" name="scores_file" accept=".json" required />
+        <label class="field-label">.zip generado por el optimizador (reemplaza el del admin)</label>
+        <input type="file" name="file" accept=".zip" required />
         <button type="submit" class="btn">Subir y aprobar</button>
+        <button type="button" class="btn-link cv-replace-separate-open">Subir ambos por separado</button>
         <div class="form-msg"></div>
       </form>
+
+      <div class="modal-overlay cv-replace-separate-modal" hidden>
+        <div class="modal-box">
+          <div class="modal-head">
+            <h4>Subir CV optimizado (por separado)</h4>
+            <button type="button" class="modal-close cv-replace-separate-close" aria-label="Cerrar">✕</button>
+          </div>
+          <form class="cv-replace-separate-form">
+            <label class="field-label">Archivo .docx/.pdf optimizado (reemplaza el del admin)</label>
+            <input type="file" name="file" accept=".docx,.doc,.pdf" required />
+            <label class="field-label">cv_analysis.json</label>
+            <input type="file" name="scores_file" accept=".json" required />
+            <button type="submit" class="btn">Subir y aprobar</button>
+            <div class="form-msg"></div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <div class="req-jobs-review review-block" style="display:none;">

@@ -97,16 +97,33 @@
         reescrito para que lo pegues en Word.
       </p>
       <form class="cv-upload-form">
-        <label class="field-label">Archivo .docx/.pdf optimizado (el que armaste en Word)</label>
-        <input type="file" name="file" accept=".docx,.doc,.pdf" required />
-
-        <label class="field-label">cv_analysis.json (el que te devolvió Claude)</label>
-        <input type="file" name="scores_file" accept=".json" required />
+        <label class="field-label">.zip generado por el optimizador (CV + análisis juntos)</label>
+        <input type="file" name="file" accept=".zip" required />
 
         <button type="submit" class="btn">Subir CV optimizado</button>
+        <button type="button" class="btn-link cv-separate-open">Subir ambos por separado</button>
         <button type="button" class="btn secondary btn-delete-cv" style="display:none;">🗑️ Borrar análisis de CV</button>
         <div class="form-msg"></div>
       </form>
+
+      <div class="modal-overlay cv-separate-modal" hidden>
+        <div class="modal-box">
+          <div class="modal-head">
+            <h4>Subir CV optimizado (por separado)</h4>
+            <button type="button" class="modal-close cv-separate-close" aria-label="Cerrar">✕</button>
+          </div>
+          <form class="cv-upload-separate-form">
+            <label class="field-label">Archivo .docx/.pdf optimizado (el que armaste en Word)</label>
+            <input type="file" name="file" accept=".docx,.doc,.pdf" required />
+
+            <label class="field-label">cv_analysis.json (el que te devolvió Claude)</label>
+            <input type="file" name="scores_file" accept=".json" required />
+
+            <button type="submit" class="btn">Subir</button>
+            <div class="form-msg"></div>
+          </form>
+        </div>
+      </div>
     </div>
 
     <div class="req-vacantes-form">

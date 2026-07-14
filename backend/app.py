@@ -24,6 +24,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -349,8 +350,7 @@ CV_ANALYSIS_REQUIRED_KEYS = {"ats_score_original", "ats_score_optimizado", "role
                              "keywords_agregados", "debilidades"}
 
 
-async def _parse_cv_analysis_json(scores_file: UploadFile) -> dict:
-    raw = await scores_file.read()
+def _parse_cv_analysis_json(raw: bytes) -> dict:
     try:
         scores = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as e:
@@ -361,12 +361,16 @@ async def _parse_cv_analysis_json(scores_file: UploadFile) -> dict:
     return scores
 
 
+def _store_cv_bytes(session_id: str, content: bytes, ext: str, content_type: str = "application/octet-stream") -> str:
+    path = f"{session_id}/cv_optimizado{ext or '.docx'}"
+    db.upload_file(path, content, content_type)
+    return path
+
+
 async def _store_cv_optimizado(session_id: str, file: UploadFile) -> str:
     ext = Path(file.filename or "cv.docx").suffix or ".docx"
     content = await file.read()
-    path = f"{session_id}/cv_optimizado{ext}"
-    db.upload_file(path, content, file.content_type or "application/octet-stream")
-    return path
+    return _store_cv_bytes(session_id, content, ext, file.content_type or "application/octet-stream")
 
 
 async def _parse_vacantes_json(file: UploadFile) -> dict:
@@ -384,18 +388,32 @@ async def _parse_vacantes_json(file: UploadFile) -> dict:
 async def admin_upload_cv(
     session_id: str,
     file: UploadFile = File(...),
-    scores_file: UploadFile = File(...),
+    scores_file: Optional[UploadFile] = File(None),
     user: dict = Depends(auth.require_admin),
 ):
     """Sube el CV optimizado (.docx/.pdf) + un único cv_analysis.json generado
-    con Claude (ver backend/schemas/prompt_para_claude_cv_analysis.md). Queda
-    en pending_review hasta que backoffice lo apruebe, rechace o reemplace."""
+    con Claude (ver backend/schemas/prompt_para_claude_cv_analysis.md). También
+    acepta el cv_optimizado_{nombre}.zip con ambos archivos juntos (generado
+    por el skill cv-optimizer-jobfinder) en el campo `file`, sin `scores_file`.
+    Queda en pending_review hasta que backoffice lo apruebe, rechace o
+    reemplace."""
     data = sessions.load_session(session_id)
     if data is None:
         raise HTTPException(404, "Sesión no encontrada")
 
-    scores = await _parse_cv_analysis_json(scores_file)
-    optimizado_path = await _store_cv_optimizado(session_id, file)
+    if (file.filename or "").lower().endswith(".zip"):
+        content = await file.read()
+        try:
+            cv_bytes, cv_ext, analysis_bytes = packaging.extract_cv_optimizado_zip(content)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        scores = _parse_cv_analysis_json(analysis_bytes)
+        optimizado_path = _store_cv_bytes(session_id, cv_bytes, cv_ext)
+    else:
+        if scores_file is None:
+            raise HTTPException(400, "Falta cv_analysis.json (o subí el .zip que contiene ambos archivos).")
+        scores = _parse_cv_analysis_json(await scores_file.read())
+        optimizado_path = await _store_cv_optimizado(session_id, file)
 
     sessions.update_session(
         session_id,
@@ -541,7 +559,7 @@ async def backoffice_reject_cv(
 async def backoffice_replace_cv(
     session_id: str,
     file: UploadFile = File(...),
-    scores_file: UploadFile = File(...),
+    scores_file: Optional[UploadFile] = File(None),
     user: dict = Depends(auth.require_backoffice),
 ):
     data = sessions.load_session(session_id)
@@ -550,8 +568,19 @@ async def backoffice_replace_cv(
     if data.get("cv_status") != "pending_review":
         raise HTTPException(400, "El CV de esta sesión no está esperando revisión.")
 
-    scores = await _parse_cv_analysis_json(scores_file)
-    optimizado_path = await _store_cv_optimizado(session_id, file)
+    if (file.filename or "").lower().endswith(".zip"):
+        content = await file.read()
+        try:
+            cv_bytes, cv_ext, analysis_bytes = packaging.extract_cv_optimizado_zip(content)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        scores = _parse_cv_analysis_json(analysis_bytes)
+        optimizado_path = _store_cv_bytes(session_id, cv_bytes, cv_ext)
+    else:
+        if scores_file is None:
+            raise HTTPException(400, "Falta cv_analysis.json (o subí el .zip que contiene ambos archivos).")
+        scores = _parse_cv_analysis_json(await scores_file.read())
+        optimizado_path = await _store_cv_optimizado(session_id, file)
 
     sessions.update_session(
         session_id,

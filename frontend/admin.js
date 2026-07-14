@@ -213,6 +213,13 @@ function buildRequestCard(req) {
   cvForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, cvIsReplace));
   deleteCvBtn.addEventListener("click", () => handleDeleteCv(req.session_id));
 
+  const cvSeparateModal = node.querySelector(".cv-separate-modal");
+  const cvSeparateForm = node.querySelector(".cv-upload-separate-form");
+  node.querySelector(".cv-separate-open").addEventListener("click", () => { cvSeparateModal.hidden = false; });
+  node.querySelector(".cv-separate-close").addEventListener("click", () => { cvSeparateModal.hidden = true; });
+  cvSeparateModal.addEventListener("click", (e) => { if (e.target === cvSeparateModal) cvSeparateModal.hidden = true; });
+  cvSeparateForm.addEventListener("submit", (e) => handleCvUpload(e, req.session_id, cvIsReplace));
+
   const vacFormWrap = node.querySelector(".req-vacantes-form");
   const vacForm = node.querySelector(".vacantes-upload-form");
   const deleteVacantesBtn = node.querySelector(".btn-delete-vacantes");
@@ -309,7 +316,9 @@ async function handleCvUpload(e, sessionId, isReplace) {
 
   const fd = new FormData();
   fd.append("file", form.file.files[0]);
-  fd.append("scores_file", form.scores_file.files[0]);
+  if (form.scores_file && form.scores_file.files[0]) {
+    fd.append("scores_file", form.scores_file.files[0]);
+  }
 
   try {
     const res = await JFAuth.authFetch(`/api/admin/${sessionId}/cv`, { method: "POST", body: fd });
@@ -319,6 +328,8 @@ async function handleCvUpload(e, sessionId, isReplace) {
     }
     msgEl.textContent = "✅ Subido. El usuario ya puede ver su resultado.";
     msgEl.className = "form-msg ok";
+    const modal = form.closest(".cv-separate-modal");
+    if (modal) modal.hidden = true;
     setTimeout(() => loadRequests(true), 1200);
   } catch (err) {
     msgEl.textContent = "❌ " + err.message;

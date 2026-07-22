@@ -415,33 +415,18 @@ async def admin_upload_cv(
         scores = _parse_cv_analysis_json(await scores_file.read())
         optimizado_path = await _store_cv_optimizado(session_id, file)
 
-    user_id = data.get("user_id")
-    assignment = roles.get_assignment(user_id) if user_id else None
-
-    if assignment:
-        sessions.update_session(
-            session_id,
-            cv_optimizado_path=optimizado_path,
-            cv_scores=scores,
-            cv_status="pending_review",
-            cv_ready_at=None,
-            cv_review_note=None,
-        )
-        try:
-            notifications.notify_pending_review(session_id, data.get("candidate_name"), "cv")
-        except Exception as e:  # noqa: BLE001
-            print(f"[admin] ERROR notificando CV pendiente de revisión: {e}")
-    else:
-        # Sin backoffice asignado: no hay a quién esperar, queda listo de
-        # inmediato (comunicación directa usuario-admin).
-        sessions.update_session(
-            session_id,
-            cv_optimizado_path=optimizado_path,
-            cv_scores=scores,
-            cv_status="ready",
-            cv_ready_at=datetime.now(timezone.utc).isoformat(),
-            cv_review_note=None,
-        )
+    sessions.update_session(
+        session_id,
+        cv_optimizado_path=optimizado_path,
+        cv_scores=scores,
+        cv_status="pending_review",
+        cv_ready_at=None,
+        cv_review_note=None,
+    )
+    try:
+        notifications.notify_pending_review(session_id, data.get("candidate_name"), "cv")
+    except Exception as e:  # noqa: BLE001
+        print(f"[admin] ERROR notificando CV pendiente de revisión: {e}")
     return {"status": "ok"}
 
 
@@ -455,29 +440,17 @@ async def admin_upload_vacantes(
 
     parsed = await _parse_vacantes_json(file)
 
-    user_id = data.get("user_id")
-    assignment = roles.get_assignment(user_id) if user_id else None
-
-    if assignment:
-        sessions.update_session(
-            session_id,
-            vacantes=parsed,
-            jobs_status="pending_review",
-            jobs_ready_at=None,
-            jobs_review_note=None,
-        )
-        try:
-            notifications.notify_pending_review(session_id, data.get("candidate_name"), "vacantes")
-        except Exception as e:  # noqa: BLE001
-            print(f"[admin] ERROR notificando vacantes pendientes de revisión: {e}")
-    else:
-        sessions.update_session(
-            session_id,
-            vacantes=parsed,
-            jobs_status="ready",
-            jobs_ready_at=datetime.now(timezone.utc).isoformat(),
-            jobs_review_note=None,
-        )
+    sessions.update_session(
+        session_id,
+        vacantes=parsed,
+        jobs_status="pending_review",
+        jobs_ready_at=None,
+        jobs_review_note=None,
+    )
+    try:
+        notifications.notify_pending_review(session_id, data.get("candidate_name"), "vacantes")
+    except Exception as e:  # noqa: BLE001
+        print(f"[admin] ERROR notificando vacantes pendientes de revisión: {e}")
     return {"status": "ok"}
 
 
@@ -550,7 +523,7 @@ async def admin_set_user_role(user_id: str, payload: dict, user: dict = Depends(
 
 @app.get("/api/admin/backoffice-users")
 async def admin_backoffice_users(user: dict = Depends(auth.require_admin)):
-    return roles.list_backoffice_users()
+    return roles.list_backoffice_options()
 
 
 @app.get("/api/admin/unassigned-users")

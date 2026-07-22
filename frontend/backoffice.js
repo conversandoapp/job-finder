@@ -54,7 +54,7 @@ function formatDate(iso) {
 function hasUnsavedInput() {
   const listEl = document.getElementById("review-list");
   const fields = listEl.querySelectorAll(
-    ".cv-reject-form textarea, .cv-replace-form input, .cv-replace-separate-form input, .jobs-reject-form textarea, .jobs-replace-form input"
+    ".cv-reject-form textarea, .cv-replace-form input, .cv-replace-separate-form input, .jobs-reject-form textarea, .jobs-replace-form input, .cv-analysis-edit-form input, .cv-analysis-edit-form textarea"
   );
   for (const el of fields) {
     if (el.type === "file") {
@@ -145,6 +145,7 @@ function buildReviewCard(req) {
   if (req.cv_status === "pending_review") {
     cvBlock.style.display = "block";
     wireReviewBlock(cvBlock, req, "cv", "cv");
+    wireCvExtras(cvBlock, req);
   }
 
   const jobsBlock = node.querySelector(".req-jobs-review");
@@ -258,6 +259,304 @@ function wireReviewBlock(block, req, cssPrefix, apiPath) {
     separateModal.addEventListener("click", (e) => { if (e.target === separateModal) separateModal.hidden = true; });
     separateForm.addEventListener("submit", (e) => submitReplace(e, separateForm, separateModal));
   }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function renderCvPreview(block, scores) {
+  block.querySelector(".cv-preview-score-before").textContent = scores.ats_score_original ?? "–";
+  block.querySelector(".cv-preview-score-after").textContent = scores.ats_score_optimizado ?? "–";
+
+  const kwList = block.querySelector(".cv-preview-keywords");
+  kwList.innerHTML = "";
+  (scores.keywords_agregados || []).forEach((k) => {
+    const el = document.createElement("span");
+    el.className = "badge green";
+    el.textContent = k;
+    kwList.appendChild(el);
+  });
+
+  const weakList = block.querySelector(".cv-preview-weaknesses");
+  weakList.innerHTML = "";
+  (scores.debilidades || []).forEach((w) => {
+    const li = document.createElement("li");
+    li.textContent = "⚠ " + w;
+    weakList.appendChild(li);
+  });
+  if (!(scores.debilidades || []).length) {
+    weakList.innerHTML = "<li>Sin debilidades registradas.</li>";
+  }
+
+  const rolesList = block.querySelector(".cv-preview-roles");
+  rolesList.innerHTML = "";
+  (scores.roles_objetivo || []).forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "role-card";
+    div.innerHTML = `
+      <div>
+        <div class="title">${escapeHtml(r.titulo || "")}</div>
+        ${r.justificacion ? `<div class="just">${escapeHtml(r.justificacion)}</div>` : ""}
+      </div>
+      ${r.match_porcentaje ? `<span class="badge blue">${r.match_porcentaje}% match</span>` : ""}
+    `;
+    rolesList.appendChild(div);
+  });
+  if (!(scores.roles_objetivo || []).length) {
+    rolesList.innerHTML = "<p class='subtitle'>Aún no hay roles registrados.</p>";
+  }
+}
+
+function renderKeywordChips(container, keywords) {
+  container.innerHTML = "";
+  keywords.forEach((kw, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "badge green";
+    chip.style.display = "inline-flex";
+    chip.style.alignItems = "center";
+    chip.style.gap = "6px";
+    chip.textContent = kw;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "chip-remove-btn";
+    rm.textContent = "✕";
+    rm.addEventListener("click", () => {
+      keywords.splice(idx, 1);
+      renderKeywordChips(container, keywords);
+    });
+    chip.appendChild(rm);
+    container.appendChild(chip);
+  });
+}
+
+function renderWeaknessRows(container, weaknesses) {
+  container.innerHTML = "";
+  weaknesses.forEach((w, idx) => {
+    const row = document.createElement("div");
+    row.className = "cv-edit-row";
+    const ta = document.createElement("textarea");
+    ta.rows = 2;
+    ta.value = w;
+    ta.addEventListener("input", () => { weaknesses[idx] = ta.value; });
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "btn-link";
+    rm.textContent = "Quitar";
+    rm.addEventListener("click", () => {
+      weaknesses.splice(idx, 1);
+      renderWeaknessRows(container, weaknesses);
+    });
+    row.appendChild(ta);
+    row.appendChild(rm);
+    container.appendChild(row);
+  });
+}
+
+function renderRoleRows(container, roles) {
+  container.innerHTML = "";
+  roles.forEach((r, idx) => {
+    const card = document.createElement("div");
+    card.className = "cv-edit-role-card";
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.placeholder = "Título del rol";
+    titleInput.value = r.titulo || "";
+    titleInput.addEventListener("input", () => { r.titulo = titleInput.value; });
+
+    const justTa = document.createElement("textarea");
+    justTa.rows = 2;
+    justTa.placeholder = "Justificación";
+    justTa.value = r.justificacion || "";
+    justTa.addEventListener("input", () => { r.justificacion = justTa.value; });
+
+    const matchInput = document.createElement("input");
+    matchInput.type = "number";
+    matchInput.min = "0";
+    matchInput.max = "100";
+    matchInput.placeholder = "% match";
+    matchInput.value = r.match_porcentaje ?? "";
+    matchInput.addEventListener("input", () => {
+      r.match_porcentaje = matchInput.value ? Number(matchInput.value) : undefined;
+    });
+
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "btn-link";
+    rm.textContent = "Quitar rol";
+    rm.addEventListener("click", () => {
+      roles.splice(idx, 1);
+      renderRoleRows(container, roles);
+    });
+
+    card.appendChild(titleInput);
+    card.appendChild(justTa);
+    card.appendChild(matchInput);
+    card.appendChild(rm);
+    container.appendChild(card);
+  });
+}
+
+function wireCvExtras(block, req) {
+  const downloadBtn = block.querySelector(".cv-download-word-btn");
+  const previewToggleBtn = block.querySelector(".cv-preview-toggle-btn");
+  const editToggleBtn = block.querySelector(".cv-edit-toggle-btn");
+  const previewBox = block.querySelector(".cv-preview-box");
+  const previewLoading = block.querySelector(".cv-preview-loading");
+  const previewContent = block.querySelector(".cv-preview-content");
+  const editForm = block.querySelector(".cv-analysis-edit-form");
+
+  let cachedScores = null;
+  let editPopulated = false;
+  let keywordsState = [];
+  let weaknessesState = [];
+  let rolesState = [];
+
+  downloadBtn.addEventListener("click", async () => {
+    downloadBtn.disabled = true;
+    const originalText = downloadBtn.textContent;
+    downloadBtn.textContent = "Descargando...";
+    try {
+      const res = await JFAuth.authFetch(`/api/download/cv/${req.session_id}`);
+      if (!res.ok) throw new Error("No se pudo descargar el CV optimizado");
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : "cv_optimizado.docx";
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("❌ " + err.message);
+    } finally {
+      downloadBtn.disabled = false;
+      downloadBtn.textContent = originalText;
+    }
+  });
+
+  async function ensureScoresLoaded() {
+    if (cachedScores) return cachedScores;
+    const res = await JFAuth.authFetch(`/api/result/${req.session_id}`);
+    const data = await res.json();
+    cachedScores = data.scores || {};
+    return cachedScores;
+  }
+
+  previewToggleBtn.addEventListener("click", async () => {
+    const isOpen = previewBox.style.display !== "none";
+    if (isOpen) {
+      previewBox.style.display = "none";
+      return;
+    }
+    previewBox.style.display = "block";
+    previewLoading.style.display = "block";
+    previewContent.style.display = "none";
+    try {
+      const scores = await ensureScoresLoaded();
+      renderCvPreview(previewBox, scores);
+      previewLoading.style.display = "none";
+      previewContent.style.display = "block";
+    } catch (err) {
+      previewLoading.textContent = "No se pudo cargar la vista previa.";
+    }
+  });
+
+  function populateEditForm(scores) {
+    editForm.ats_before.value = scores.ats_score_original ?? "";
+    editForm.ats_after.value = scores.ats_score_optimizado ?? "";
+    editForm.resumen.value = scores.resumen || "";
+    keywordsState = [...(scores.keywords_agregados || [])];
+    weaknessesState = [...(scores.debilidades || [])];
+    rolesState = (scores.roles_objetivo || []).map((r) => ({ ...r }));
+    renderKeywordChips(editForm.querySelector(".cv-edit-keywords-list"), keywordsState);
+    renderWeaknessRows(editForm.querySelector(".cv-edit-weaknesses-list"), weaknessesState);
+    renderRoleRows(editForm.querySelector(".cv-edit-roles-list"), rolesState);
+  }
+
+  editToggleBtn.addEventListener("click", async () => {
+    const isOpen = editForm.style.display !== "none";
+    if (isOpen) {
+      editForm.style.display = "none";
+      return;
+    }
+    editForm.style.display = "block";
+    if (!editPopulated) {
+      const scores = await ensureScoresLoaded();
+      populateEditForm(scores);
+      editPopulated = true;
+    }
+  });
+
+  editForm.querySelector(".cv-edit-keyword-add").addEventListener("click", () => {
+    const input = editForm.querySelector(".cv-edit-keyword-input");
+    const val = input.value.trim();
+    if (!val) return;
+    keywordsState.push(val);
+    input.value = "";
+    renderKeywordChips(editForm.querySelector(".cv-edit-keywords-list"), keywordsState);
+  });
+
+  editForm.querySelector(".cv-edit-weakness-add").addEventListener("click", () => {
+    weaknessesState.push("");
+    renderWeaknessRows(editForm.querySelector(".cv-edit-weaknesses-list"), weaknessesState);
+  });
+
+  editForm.querySelector(".cv-edit-role-add").addEventListener("click", () => {
+    rolesState.push({ titulo: "", justificacion: "", match_porcentaje: undefined });
+    renderRoleRows(editForm.querySelector(".cv-edit-roles-list"), rolesState);
+  });
+
+  editForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = editForm.querySelector(".form-msg");
+    msgEl.textContent = "";
+    msgEl.className = "form-msg";
+
+    const payload = {
+      ats_score_original: Number(editForm.ats_before.value) || 0,
+      ats_score_optimizado: Number(editForm.ats_after.value) || 0,
+      resumen: editForm.resumen.value.trim() || undefined,
+      keywords_agregados: keywordsState.map((k) => k.trim()).filter((k) => k !== ""),
+      debilidades: weaknessesState.map((w) => w.trim()).filter((w) => w !== ""),
+      roles_objetivo: rolesState
+        .filter((r) => (r.titulo || "").trim() !== "")
+        .map((r) => ({
+          titulo: r.titulo.trim(),
+          justificacion: (r.justificacion || "").trim(),
+          match_porcentaje: r.match_porcentaje ? Number(r.match_porcentaje) : undefined,
+        })),
+    };
+
+    try {
+      const res = await JFAuth.authFetch(`/api/backoffice/${req.session_id}/cv/analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Error al guardar el análisis");
+      }
+      cachedScores = payload;
+      msgEl.textContent = "✅ Cambios guardados. La solicitud sigue en revisión.";
+      msgEl.className = "form-msg ok";
+      if (previewBox.style.display !== "none") {
+        renderCvPreview(previewBox, payload);
+      }
+    } catch (err) {
+      msgEl.textContent = "❌ " + err.message;
+      msgEl.className = "form-msg err";
+    }
+  });
 }
 
 document.getElementById("refresh-review-btn").addEventListener("click", () => loadAll(true));

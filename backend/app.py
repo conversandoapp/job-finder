@@ -350,15 +350,27 @@ CV_ANALYSIS_REQUIRED_KEYS = {"ats_score_original", "ats_score_optimizado", "role
                              "keywords_agregados", "debilidades"}
 
 
+def _validate_cv_analysis(scores: dict) -> dict:
+    if not isinstance(scores, dict):
+        raise HTTPException(400, "El análisis debe ser un objeto JSON.")
+    missing = CV_ANALYSIS_REQUIRED_KEYS - scores.keys()
+    if missing:
+        raise HTTPException(400, f"Al análisis le faltan estas claves: {', '.join(sorted(missing))}")
+    for key in ("roles_objetivo", "keywords_agregados", "debilidades"):
+        if not isinstance(scores.get(key), list):
+            raise HTTPException(400, f"'{key}' debe ser una lista.")
+    for key in ("ats_score_original", "ats_score_optimizado"):
+        if not isinstance(scores.get(key), (int, float)):
+            raise HTTPException(400, f"'{key}' debe ser un número.")
+    return scores
+
+
 def _parse_cv_analysis_json(raw: bytes) -> dict:
     try:
         scores = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as e:
         raise HTTPException(400, f"cv_analysis.json no es JSON válido: {e}")
-    missing = CV_ANALYSIS_REQUIRED_KEYS - scores.keys()
-    if missing:
-        raise HTTPException(400, f"Al JSON le faltan estas claves: {', '.join(sorted(missing))}")
-    return scores
+    return _validate_cv_analysis(scores)
 
 
 def _store_cv_bytes(session_id: str, content: bytes, ext: str, content_type: str = "application/octet-stream") -> str:
@@ -638,9 +650,9 @@ async def backoffice_replace_cv(
         scores = _parse_cv_analysis_json(analysis_bytes)
         optimizado_path = _store_cv_bytes(session_id, cv_bytes, cv_ext)
     else:
-        if scores_file is None:
-            raise HTTPException(400, "Falta cv_analysis.json (o subí el .zip que contiene ambos archivos).")
-        scores = _parse_cv_analysis_json(await scores_file.read())
+        # scores_file es opcional acá: si el backoffice solo quiere corregir
+        # el Word, se mantiene el análisis que ya estaba guardado.
+        scores = _parse_cv_analysis_json(await scores_file.read()) if scores_file is not None else data.get("cv_scores")
         optimizado_path = await _store_cv_optimizado(session_id, file)
 
     sessions.update_session(
@@ -651,6 +663,25 @@ async def backoffice_replace_cv(
         cv_ready_at=datetime.now(timezone.utc).isoformat(),
         cv_review_note=None,
     )
+    return {"status": "ok"}
+
+
+@app.post("/api/backoffice/{session_id}/cv/analysis")
+async def backoffice_update_cv_analysis(
+    session_id: str, payload: dict, user: dict = Depends(auth.require_backoffice)
+):
+    """Guarda ediciones del análisis (keywords, roles objetivo, debilidades,
+    puntajes ATS) hechas a mano desde el formulario visual del backoffice.
+    No aprueba ni cambia el estado -- la solicitud sigue en pending_review
+    hasta que el backoffice presione "Aprobar" por separado."""
+    data = sessions.load_session(session_id)
+    if data is None:
+        raise HTTPException(404, "Sesión no encontrada")
+    if data.get("cv_status") != "pending_review":
+        raise HTTPException(400, "El CV de esta sesión no está esperando revisión.")
+
+    scores = _validate_cv_analysis(payload)
+    sessions.update_session(session_id, cv_scores=scores)
     return {"status": "ok"}
 
 

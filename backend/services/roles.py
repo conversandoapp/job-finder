@@ -2,15 +2,26 @@
 Roles de usuario y asignación usuario <-> backoffice.
 
 ADMIN_EMAIL (variable de entorno) sigue siendo el admin permanente de
-respaldo: nunca se lee su fila real de `user_roles` para decidir si es
-admin, así que nunca se puede perder ese acceso desde la UI. El resto de
-los roles (usuario/backoffice/admin) se gestionan desde /admin y viven en
-la tabla `user_roles`. BACKOFFICE_EMAILS (env var) queda como fallback
-legacy: solo se consulta si el usuario no tiene fila en `user_roles`.
+respaldo: siempre resuelve a "admin" sin importar lo que diga su fila en
+`user_roles` (ese email nunca se puede cambiar ni perder acceso desde la
+UI). El resto de los roles (usuario/backoffice/admin) se gestionan desde
+/admin y viven en la tabla `user_roles`. BACKOFFICE_EMAILS (env var) queda
+como fallback legacy: solo se consulta si el usuario no tiene fila en
+`user_roles`.
 
-La lista de "usuarios" gestionables se limita a quienes ya tienen al
-menos una fila en `sessions` (no se listan todas las cuentas de Supabase
-Auth) -- así lo pidió el dueño del producto.
+Todo usuario tiene siempre un backoffice: por defecto es el admin
+permanente, hasta que el admin asigne uno específico en
+`backoffice_assignments`. Por eso TODO lo que el admin sube pasa por
+`pending_review` (nunca se salta la aprobación) -- si el backoffice
+efectivo es un admin, ese admin se aprueba a sí mismo desde /backoffice
+(donde cualquier admin ya ve todas las sesiones, sin importar asignación).
+
+La lista de "usuarios" gestionables (para el rol y para quién puede ser
+"candidato" de una asignación) se limita a quienes ya tienen al menos una
+fila en `sessions` -- así lo pidió el dueño del producto. La lista de
+"quién puede ser backoffice" (list_backoffice_options) es la excepción:
+sale directo de `user_roles`, sin requerir sesión, porque el admin
+permanente puede no tener ninguna sesión propia.
 """
 import os
 
@@ -49,12 +60,23 @@ def _get_role_row(user_id: str) -> dict | None:
     return res.data[0] if res.data else None
 
 
+def _ensure_permanent_admin_row(user_id: str, email: str | None) -> None:
+    """Persiste la fila del admin permanente la primera vez que autentica,
+    para que su UUID real quede capturado (necesario para que aparezca en
+    list_backoffice_options sin depender de que haya creado una sesión)."""
+    db.get_client().table("user_roles").upsert({
+        "user_id": user_id,
+        "email": (email or "").strip().lower(),
+        "role": "admin",
+    }).execute()
+
+
 def get_role(user_id: str | None, email: str | None) -> str:
+    row = _get_role_row(user_id) if user_id else None
     if is_permanent_admin_email(email):
+        if row is None and user_id:
+            _ensure_permanent_admin_row(user_id, email)
         return "admin"
-    if not user_id:
-        return "usuario"
-    row = _get_role_row(user_id)
     if row:
         return row["role"]
     if (email or "").strip().lower() in _backoffice_emails():
@@ -129,36 +151,42 @@ def set_role(*, user_id: str, email: str, role: str, actor_user_id: str) -> dict
 
     if role != "usuario":
         _delete_assignment(user_id)
-    if previous_role == "backoffice" and role != "backoffice":
+    if previous_role in ("backoffice", "admin") and role == "usuario":
+        # Deja de ser elegible como backoffice: sus candidatos asignados
+        # vuelven al admin por defecto (backoffice implícito).
         _delete_assignments_for_backoffice(user_id)
 
     return res.data[0] if res.data else row
 
 
 def assign_user_to_backoffice(*, user_id: str, backoffice_user_id: str) -> dict:
+    """Asigna un usuario sin backoffice a uno específico. Solo funciona si
+    el usuario todavía no tiene asignación (no reasigna en un solo paso):
+    para cambiarlo de backoffice hay que llamar unassign_user primero, así
+    vuelve a aparecer en la lista de "disponibles" antes de asignarlo de
+    nuevo."""
     if not user_id or not backoffice_user_id:
         raise ValueError("Falta user_id o backoffice_user_id")
 
     users_by_id = {u["user_id"]: u for u in list_users_with_sessions()}
     user = users_by_id.get(user_id)
-    backoffice_user = users_by_id.get(backoffice_user_id)
     if user is None:
         raise ValueError("Usuario no encontrado")
-    if backoffice_user is None or backoffice_user["role"] != "backoffice":
-        raise ValueError("El backoffice elegido no tiene rol de backoffice")
 
-    existing = get_assignment(user_id)
-    if existing and existing["backoffice_user_id"] != backoffice_user_id:
-        if has_pending_process(user_id):
-            raise PendingProcessError(
-                "Este usuario tiene un proceso en revisión; no se puede reasignar hasta que se resuelva."
-            )
+    if get_assignment(user_id):
+        raise ValueError(
+            "Este usuario ya tiene un backoffice asignado; primero quita la asignación actual."
+        )
+
+    backoffice_row = _get_role_row(backoffice_user_id)
+    if backoffice_row is None or backoffice_row["role"] not in ("backoffice", "admin"):
+        raise ValueError("El backoffice elegido no tiene rol de backoffice ni de admin")
 
     row = {
         "user_id": user_id,
         "user_email": user["email"],
         "backoffice_user_id": backoffice_user_id,
-        "backoffice_email": backoffice_user["email"],
+        "backoffice_email": backoffice_row["email"],
     }
     res = db.get_client().table("backoffice_assignments").upsert(row).execute()
     return res.data[0] if res.data else row
@@ -172,8 +200,24 @@ def unassign_user(user_id: str) -> None:
     _delete_assignment(user_id)
 
 
-def list_backoffice_users() -> list[dict]:
-    return [u for u in list_users_with_sessions() if u["role"] == "backoffice"]
+def list_backoffice_options() -> list[dict]:
+    """Cuentas que pueden ser elegidas como backoffice de un usuario: rol
+    backoffice o admin (todos los admins heredan el permiso por
+    jerarquía). Sale directo de user_roles, no de sessions, porque el
+    admin permanente puede no tener ninguna sesión propia."""
+    res = db.get_client().table("user_roles").select("*").execute()
+    options = [
+        {
+            "user_id": r["user_id"],
+            "email": r["email"],
+            "role": r["role"],
+            "is_permanent_admin": is_permanent_admin_email(r["email"]),
+        }
+        for r in res.data
+        if r["role"] in ("backoffice", "admin")
+    ]
+    options.sort(key=lambda o: (o["email"] or "").lower())
+    return options
 
 
 def list_unassigned_users() -> list[dict]:

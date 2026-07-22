@@ -68,16 +68,18 @@ normal, no hace falta.
    A partir de ahí, ese email entra como admin en `/admin-login` y
    como usuario normal en `/login.html` (son el mismo login de Supabase,
    lo único que cambia es qué endpoints del backend le dejamos usar).
-   - Opcional: para que alguien revise (apruebe/rechace/reemplace) el CV
-     optimizado y las vacantes antes de que el candidato las vea, registrá
-     esa cuenta en `/login.html`, entrá a `/admin` → pestaña "Usuarios" y
-     asignale el rol "backoffice", y después asignale los usuarios que va a
-     revisar. Entra por `/backoffice-login`. Un usuario sin backoffice
-     asignado no pasa por esta revisión: lo que subas para él queda listo de
-     inmediato. `BACKOFFICE_EMAILS` en `backend/.env` sigue existiendo como
-     fallback legacy (lista separada por coma), pero ya no hace falta
-     tocarlo — se gestiona todo desde el panel admin. El admin ya tiene este
-     permiso automáticamente, no hace falta asignarle rol aparte.
+   - Todo usuario tiene siempre un backoffice que revisa (aprueba/rechaza/
+     reemplaza) el CV optimizado y las vacantes antes de que el candidato
+     los vea: por defecto es el admin (podés aprobarte a vos mismo desde
+     `/backoffice`, donde ya ves todas las solicitudes). Para delegarle
+     esa revisión a otra persona, registrá esa cuenta en `/login.html`,
+     entrá a `/admin` → pestaña "Usuarios", asignale el rol "backoffice" y
+     después asignale los usuarios que va a revisar (ahí entra por
+     `/backoffice-login` y solo ve a los que le asignaste). Para cambiar a
+     alguien de backoffice primero hay que quitarle la asignación actual
+     desde esa misma pestaña. `BACKOFFICE_EMAILS` en `backend/.env` sigue
+     existiendo como fallback legacy (lista separada por coma), pero ya no
+     hace falta tocarlo — se gestiona todo desde el panel admin.
 
 Sin `SUPABASE_URL` / `SUPABASE_ANON_KEY` configurados, el login no
 funciona — es la única parte no-opcional de la configuración. **La pantalla
@@ -243,10 +245,14 @@ job-finder/
   sin importar lo que diga la tabla — nunca se pierde ese acceso.
   `BACKOFFICE_EMAILS` queda como fallback legacy, solo se usa si el usuario
   no tiene fila en `user_roles`. El admin siempre tiene también permisos de
-  backoffice (jerarquía admin ⊇ backoffice ⊇ usuario). Cada backoffice solo
-  ve (y revisa) los usuarios que el admin le asignó en
-  `backoffice_assignments` — un usuario sin asignación no pasa por revisión,
-  la comunicación es directa entre él y el admin.
+  backoffice (jerarquía admin ⊇ backoffice ⊇ usuario). Todo usuario tiene
+  siempre un backoffice: por defecto es el admin permanente, hasta que se
+  le asigne uno específico en `backoffice_assignments` — nunca se salta la
+  aprobación, solo cambia quién la hace (si es el admin, se aprueba a sí
+  mismo desde `/backoffice`, donde ya ve todo). Cada backoffice no-admin
+  solo ve (y revisa) los usuarios que el admin le asignó. Reasignar a
+  alguien de un backoffice a otro requiere primero quitarle la asignación
+  actual — recién ahí vuelve a estar disponible para asignarlo de nuevo.
 - **JSON en vez de HTML para las vacantes (y ahora también para el análisis
   de CV):** vos seguís usando Claude para todo el trabajo de análisis y
   redacción, pero el output es datos estructurados. Las páginas ya tienen el

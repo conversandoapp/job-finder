@@ -500,7 +500,7 @@ function renderUsersTable(users) {
     tr.appendChild(roleTd);
 
     const assignedTd = document.createElement("td");
-    assignedTd.textContent = u.backoffice_email || "— Sin asignar (directo con admin)";
+    assignedTd.textContent = u.backoffice_email || "Admin (por defecto)";
     tr.appendChild(assignedTd);
 
     const actionsTd = document.createElement("td");
@@ -575,7 +575,8 @@ async function loadAssignmentDropdowns() {
   backofficeUsers.forEach(u => {
     const opt = document.createElement("option");
     opt.value = u.user_id;
-    opt.textContent = `${u.candidate_name || u.email} (${u.email})`;
+    const roleTag = u.role === "admin" ? (u.is_permanent_admin ? " (admin permanente)" : " (admin)") : "";
+    opt.textContent = `${u.email}${roleTag}`;
     backofficeSelect.appendChild(opt);
   });
 

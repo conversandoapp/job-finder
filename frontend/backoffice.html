@@ -71,7 +71,73 @@
 
     <div class="req-cv-review review-block" style="display:none;">
       <h3>📄 CV optimizado — esperando revisión</h3>
+
       <div class="review-actions">
+        <button type="button" class="btn secondary cv-download-word-btn">📥 Descargar Word</button>
+        <button type="button" class="btn secondary cv-preview-toggle-btn">👁️ Vista previa del postulante</button>
+        <button type="button" class="btn secondary cv-edit-toggle-btn">✏️ Editar análisis</button>
+      </div>
+
+      <div class="cv-preview-box" style="display:none; margin-top:12px;">
+        <div class="cv-preview-loading" style="color:var(--text-muted); font-size:13px;">Cargando vista previa…</div>
+        <div class="cv-preview-content" style="display:none;">
+          <div class="score-circles">
+            <div class="score-circle before">
+              <span class="cv-preview-score-before">–</span>
+              <span class="lbl">Antes</span>
+            </div>
+            <div class="score-circle after">
+              <span class="cv-preview-score-after">–</span>
+              <span class="lbl">Después</span>
+            </div>
+          </div>
+          <h4>Keywords agregados</h4>
+          <div class="chip-list cv-preview-keywords"></div>
+          <h4>Debilidades detectadas</h4>
+          <ul class="plain cv-preview-weaknesses"></ul>
+          <h4>Roles objetivo / oportunidades sugeridas</h4>
+          <div class="cv-preview-roles"></div>
+        </div>
+      </div>
+
+      <form class="cv-analysis-edit-form" style="display:none; margin-top:12px;">
+        <div class="cv-edit-scores-row">
+          <div>
+            <label class="field-label">Puntaje ATS — antes</label>
+            <input type="number" name="ats_before" min="0" max="100" />
+          </div>
+          <div>
+            <label class="field-label">Puntaje ATS — después</label>
+            <input type="number" name="ats_after" min="0" max="100" />
+          </div>
+        </div>
+
+        <label class="field-label">Resumen del candidato (opcional)</label>
+        <textarea name="resumen" rows="2"></textarea>
+
+        <label class="field-label">Keywords agregados</label>
+        <div class="cv-edit-keywords-list chip-list"></div>
+        <div class="cv-edit-add-row">
+          <input type="text" class="cv-edit-keyword-input" placeholder="Nueva keyword" />
+          <button type="button" class="btn-link cv-edit-keyword-add">+ Agregar keyword</button>
+        </div>
+
+        <label class="field-label" style="margin-top:14px;">Debilidades detectadas</label>
+        <div class="cv-edit-weaknesses-list"></div>
+        <button type="button" class="btn-link cv-edit-weakness-add">+ Agregar debilidad</button>
+
+        <label class="field-label" style="margin-top:14px;">Roles objetivo / oportunidades sugeridas</label>
+        <div class="cv-edit-roles-list"></div>
+        <button type="button" class="btn-link cv-edit-role-add">+ Agregar rol</button>
+
+        <div style="margin-top:14px;">
+          <button type="submit" class="btn">Guardar cambios</button>
+          <span style="margin-left:8px; color:var(--text-muted); font-size:13px;">Guardar no aprueba — la solicitud sigue en revisión.</span>
+        </div>
+        <div class="form-msg"></div>
+      </form>
+
+      <div class="review-actions" style="margin-top:14px;">
         <button type="button" class="btn cv-approve-btn">✅ Aprobar</button>
         <button type="button" class="btn secondary cv-reject-toggle-btn">❌ Rechazar</button>
         <button type="button" class="btn secondary cv-replace-toggle-btn">✏️ Reemplazar</button>
@@ -99,8 +165,8 @@
           <form class="cv-replace-separate-form">
             <label class="field-label">Archivo .docx/.pdf optimizado (reemplaza el del admin)</label>
             <input type="file" name="file" accept=".docx,.doc,.pdf" required />
-            <label class="field-label">cv_analysis.json</label>
-            <input type="file" name="scores_file" accept=".json" required />
+            <label class="field-label">cv_analysis.json (opcional — si no subes uno, se mantiene el análisis actual)</label>
+            <input type="file" name="scores_file" accept=".json" />
             <button type="submit" class="btn">Subir y aprobar</button>
             <div class="form-msg"></div>
           </form>

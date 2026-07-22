@@ -70,10 +70,14 @@ normal, no hace falta.
    lo único que cambia es qué endpoints del backend le dejamos usar).
    - Opcional: para que alguien revise (apruebe/rechace/reemplace) el CV
      optimizado y las vacantes antes de que el candidato las vea, registrá
-     esa cuenta también en `/login.html` y agregá su email a
-     `BACKOFFICE_EMAILS` en `backend/.env` (lista separada por coma). Entra
-     por `/backoffice-login`. El admin ya tiene este permiso automáticamente,
-     no hace falta que agregues su email también acá.
+     esa cuenta en `/login.html`, entrá a `/admin` → pestaña "Usuarios" y
+     asignale el rol "backoffice", y después asignale los usuarios que va a
+     revisar. Entra por `/backoffice-login`. Un usuario sin backoffice
+     asignado no pasa por esta revisión: lo que subas para él queda listo de
+     inmediato. `BACKOFFICE_EMAILS` en `backend/.env` sigue existiendo como
+     fallback legacy (lista separada por coma), pero ya no hace falta
+     tocarlo — se gestiona todo desde el panel admin. El admin ya tiene este
+     permiso automáticamente, no hace falta asignarle rol aparte.
 
 Sin `SUPABASE_URL` / `SUPABASE_ANON_KEY` configurados, el login no
 funciona — es la única parte no-opcional de la configuración. **La pantalla
@@ -232,13 +236,17 @@ job-finder/
   ver `auth.py`) sin necesitar el SDK completo para eso — pero sí usa el SDK
   de Python (`supabase`, ver `services/db.py`) para leer/escribir en
   Postgres y Storage con la `service_role` key.
-- **El admin y el backoffice son listas de emails en variables de entorno,
-  no una tabla de roles:** `ADMIN_EMAIL` (un solo email) y `BACKOFFICE_EMAILS`
-  (lista separada por coma) — alcanza para el volumen de personas
-  administrando/revisando hoy. El admin siempre tiene también permisos de
-  backoffice (jerarquía admin ⊇ backoffice ⊇ usuario). Si esto crece mucho o
-  necesitan permisos más finos, ahí sí conviene migrar a una tabla de roles
-  en Supabase.
+- **Roles gestionables desde `/admin` (tabla `user_roles`), con `ADMIN_EMAIL`
+  como respaldo permanente:** el admin puede promover a cualquier usuario con
+  al menos una sesión creada a `usuario`/`backoffice`/`admin` desde la
+  pestaña "Usuarios". `ADMIN_EMAIL` (variable de entorno) sigue siendo admin
+  sin importar lo que diga la tabla — nunca se pierde ese acceso.
+  `BACKOFFICE_EMAILS` queda como fallback legacy, solo se usa si el usuario
+  no tiene fila en `user_roles`. El admin siempre tiene también permisos de
+  backoffice (jerarquía admin ⊇ backoffice ⊇ usuario). Cada backoffice solo
+  ve (y revisa) los usuarios que el admin le asignó en
+  `backoffice_assignments` — un usuario sin asignación no pasa por revisión,
+  la comunicación es directa entre él y el admin.
 - **JSON en vez de HTML para las vacantes (y ahora también para el análisis
   de CV):** vos seguís usando Claude para todo el trabajo de análisis y
   redacción, pero el output es datos estructurados. Las páginas ya tienen el

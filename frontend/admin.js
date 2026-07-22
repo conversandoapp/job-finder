@@ -31,7 +31,9 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.getElementById("tab-requests").style.display = btn.dataset.tab === "requests" ? "block" : "none";
     document.getElementById("tab-past").style.display = btn.dataset.tab === "past" ? "block" : "none";
     document.getElementById("tab-notifications").style.display = btn.dataset.tab === "notifications" ? "block" : "none";
+    document.getElementById("tab-users").style.display = btn.dataset.tab === "users" ? "block" : "none";
     if (btn.dataset.tab === "notifications") loadNotifications();
+    if (btn.dataset.tab === "users") loadUsers();
   });
 });
 
@@ -425,6 +427,193 @@ document.getElementById("connect-drive-btn").addEventListener("click", async () 
     window.location.href = authorize_url;
   } catch (err) {
     alert("❌ " + err.message);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Pestaña "Usuarios": rol de cada usuario y asignación a backoffice.
+// ---------------------------------------------------------------------------
+
+const ROLE_LABEL = { usuario: "Usuario", backoffice: "Backoffice", admin: "Admin" };
+
+async function loadUsers() {
+  const [usersRes] = await Promise.all([
+    JFAuth.authFetch("/api/admin/users"),
+    loadAssignmentDropdowns(),
+  ]);
+  const users = await usersRes.json();
+  renderUsersTable(users);
+}
+
+function renderUsersTable(users) {
+  const listEl = document.getElementById("users-list");
+  if (!users.length) {
+    listEl.innerHTML = "<div class='card'>Todavía no hay usuarios con solicitudes creadas.</div>";
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "users-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th>Rol</th>
+        <th>Backoffice asignado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+
+  users.forEach(u => {
+    const tr = document.createElement("tr");
+
+    const nameTd = document.createElement("td");
+    const nameDiv = document.createElement("div");
+    nameDiv.textContent = u.candidate_name || "(sin nombre)";
+    nameDiv.style.fontWeight = "600";
+    const emailDiv = document.createElement("div");
+    emailDiv.textContent = u.email || "";
+    emailDiv.className = "req-meta";
+    nameTd.appendChild(nameDiv);
+    nameTd.appendChild(emailDiv);
+    tr.appendChild(nameTd);
+
+    const roleTd = document.createElement("td");
+    const roleSelect = document.createElement("select");
+    ["usuario", "backoffice", "admin"].forEach(role => {
+      const opt = document.createElement("option");
+      opt.value = role;
+      opt.textContent = ROLE_LABEL[role];
+      if (role === u.role) opt.selected = true;
+      roleSelect.appendChild(opt);
+    });
+    if (u.is_permanent_admin) {
+      roleSelect.disabled = true;
+      roleSelect.title = "Admin permanente (ADMIN_EMAIL) — no se puede cambiar desde acá.";
+    } else {
+      roleSelect.addEventListener("change", () => handleRoleChange(u, roleSelect));
+    }
+    roleTd.appendChild(roleSelect);
+    tr.appendChild(roleTd);
+
+    const assignedTd = document.createElement("td");
+    assignedTd.textContent = u.backoffice_email || "— Sin asignar (directo con admin)";
+    tr.appendChild(assignedTd);
+
+    const actionsTd = document.createElement("td");
+    if (u.backoffice_user_id) {
+      const unassignBtn = document.createElement("button");
+      unassignBtn.type = "button";
+      unassignBtn.className = "btn-link";
+      unassignBtn.textContent = "Quitar asignación";
+      if (u.has_pending_process) {
+        unassignBtn.disabled = true;
+        unassignBtn.title = "Tiene un proceso en revisión pendiente; no se puede quitar la asignación todavía.";
+      } else {
+        unassignBtn.addEventListener("click", () => handleUnassign(u));
+      }
+      actionsTd.appendChild(unassignBtn);
+    }
+    tr.appendChild(actionsTd);
+
+    tbody.appendChild(tr);
+  });
+
+  listEl.innerHTML = "";
+  listEl.appendChild(table);
+}
+
+async function handleRoleChange(user, selectEl) {
+  const newRole = selectEl.value;
+  const previousRole = user.role;
+  try {
+    const res = await JFAuth.authFetch(`/api/admin/users/${user.user_id}/role`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole, email: user.email }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "No se pudo cambiar el rol");
+    }
+    loadUsers();
+  } catch (err) {
+    alert("❌ " + err.message);
+    selectEl.value = previousRole;
+  }
+}
+
+async function handleUnassign(user) {
+  if (!confirm(`¿Quitar la asignación de backoffice de ${user.email}?`)) return;
+  try {
+    const res = await JFAuth.authFetch(`/api/admin/assignments/${user.user_id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "No se pudo quitar la asignación");
+    }
+    loadUsers();
+  } catch (err) {
+    alert("❌ " + err.message);
+  }
+}
+
+async function loadAssignmentDropdowns() {
+  const [backofficeRes, unassignedRes] = await Promise.all([
+    JFAuth.authFetch("/api/admin/backoffice-users"),
+    JFAuth.authFetch("/api/admin/unassigned-users"),
+  ]);
+  const backofficeUsers = await backofficeRes.json();
+  const unassignedUsers = await unassignedRes.json();
+
+  const backofficeSelect = document.getElementById("assign-backoffice-select");
+  const userSelect = document.getElementById("assign-user-select");
+
+  backofficeSelect.innerHTML = '<option value="">Elige un backoffice…</option>';
+  backofficeUsers.forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.user_id;
+    opt.textContent = `${u.candidate_name || u.email} (${u.email})`;
+    backofficeSelect.appendChild(opt);
+  });
+
+  userSelect.innerHTML = '<option value="">Elige un usuario…</option>';
+  unassignedUsers.forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.user_id;
+    opt.textContent = `${u.candidate_name || u.email} (${u.email})`;
+    userSelect.appendChild(opt);
+  });
+}
+
+document.getElementById("assign-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msgEl = document.getElementById("assign-form-msg");
+  msgEl.textContent = "";
+  msgEl.className = "form-msg";
+
+  const backofficeUserId = document.getElementById("assign-backoffice-select").value;
+  const userId = document.getElementById("assign-user-select").value;
+
+  try {
+    const res = await JFAuth.authFetch("/api/admin/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, backoffice_user_id: backofficeUserId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "No se pudo asignar");
+    }
+    msgEl.textContent = "✅ Asignado.";
+    msgEl.className = "form-msg ok";
+    document.getElementById("assign-form").reset();
+    loadUsers();
+  } catch (err) {
+    msgEl.textContent = "❌ " + err.message;
+    msgEl.className = "form-msg err";
   }
 });
 

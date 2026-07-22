@@ -17,16 +17,21 @@ HS256 de antes. Por eso este módulo soporta los dos casos:
    compartido de Project Settings → API. Si configurás SUPABASE_JWT_SECRET,
    se usa como fallback para tokens firmados con HS256.
 
-El admin es UNA sola cuenta: cualquier usuario autenticado cuyo email
-coincida con ADMIN_EMAIL (variable de entorno) puede usar los endpoints
-`/api/admin/*`. Todos los demás usuarios autenticados son "usuarios normales"
-y solo pueden ver/tocar sus propias sesiones (comparando user_id).
+El admin permanente de respaldo es UNA sola cuenta: cualquier usuario
+autenticado cuyo email coincida con ADMIN_EMAIL (variable de entorno) puede
+usar los endpoints `/api/admin/*`, sin importar lo que diga la tabla
+`user_roles` (nunca se puede perder ese acceso desde la UI). El resto de
+los roles (usuario/backoffice/admin) se gestiona desde /admin y vive en la
+tabla `user_roles` (ver `services/roles.py`). Todos los demás usuarios
+autenticados sin rol asignado son "usuarios normales" y solo pueden
+ver/tocar sus propias sesiones (comparando user_id).
 
 Además existe el rol "backoffice" (revisa lo que sube el admin antes de que
-llegue al candidato): cualquier email listado en BACKOFFICE_EMAILS (variable
-de entorno, separada por coma) puede usar los endpoints `/api/backoffice/*`.
-El admin siempre tiene también permisos de backoffice (jerarquía admin ⊇
-backoffice ⊇ usuario) sin necesidad de listar su email en BACKOFFICE_EMAILS.
+llegue al candidato, solo para los usuarios que el admin le asignó como
+asesorados) — puede usar los endpoints `/api/backoffice/*`. BACKOFFICE_EMAILS
+(variable de entorno, separada por coma) queda como fallback legacy: solo
+se usa si el usuario no tiene fila en `user_roles`. El admin siempre tiene
+también permisos de backoffice (jerarquía admin ⊇ backoffice ⊇ usuario).
 """
 import os
 
@@ -34,33 +39,18 @@ import jwt
 from fastapi import HTTPException, Request
 from jwt import PyJWKClient
 
+from services import roles
+
 _jwks_client: PyJWKClient | None = None
 _jwks_client_url: str | None = None
 
 
-def _admin_email() -> str:
-    return os.getenv("ADMIN_EMAIL", "").strip().lower()
-
-
 def is_admin(user: dict) -> bool:
-    admin_email = _admin_email()
-    if not admin_email:
-        return False
-    return (user.get("email") or "").strip().lower() == admin_email
-
-
-def _backoffice_emails() -> set[str]:
-    raw = os.getenv("BACKOFFICE_EMAILS", "")
-    # El filtro "if e.strip()" es obligatorio: sin él, con la env var vacía
-    # el set quedaría en {""}, y cualquier JWT sin claim "email" (ej. algún
-    # esquema de auth por teléfono) calificaría como backoffice por accidente.
-    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+    return roles.get_role(user.get("id"), user.get("email")) == "admin"
 
 
 def is_backoffice(user: dict) -> bool:
-    if is_admin(user):
-        return True
-    return (user.get("email") or "").strip().lower() in _backoffice_emails()
+    return roles.get_role(user.get("id"), user.get("email")) in ("admin", "backoffice")
 
 
 def _get_jwks_client() -> PyJWKClient | None:

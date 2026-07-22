@@ -38,3 +38,23 @@
 .notif-item .subj { font-weight: 600; font-size: 14px; }
 .notif-item .ts { font-size: 12px; color: var(--text-muted); margin: 2px 0 8px; }
 .notif-item pre { white-space: pre-wrap; font-family: inherit; font-size: 13px; margin: 0; }
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid var(--gray-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+.users-table th, .users-table td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--gray-border);
+  font-size: 14px;
+  vertical-align: middle;
+}
+.users-table th { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.users-table tr:last-child td { border-bottom: none; }
+.users-table select { width: auto; padding: 6px 10px; }

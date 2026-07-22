@@ -69,3 +69,17 @@ def update_session(session_id: str, **kwargs) -> dict:
 def list_sessions() -> list[dict]:
     res = db.get_client().table(TABLE).select("*").order("created_at", desc=True).execute()
     return res.data
+
+
+def list_sessions_for_users(user_ids: list[str]) -> list[dict]:
+    if not user_ids:
+        return []
+    res = (
+        db.get_client()
+        .table(TABLE)
+        .select("*")
+        .in_("user_id", user_ids)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return res.data

@@ -32,7 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from services import auth, db, drive_oauth, notifications, packaging, role_matcher, sessions, storage_drive
+from services import auth, db, drive_oauth, notifications, packaging, role_matcher, roles, sessions, storage_drive
 
 load_dotenv()
 
@@ -415,18 +415,33 @@ async def admin_upload_cv(
         scores = _parse_cv_analysis_json(await scores_file.read())
         optimizado_path = await _store_cv_optimizado(session_id, file)
 
-    sessions.update_session(
-        session_id,
-        cv_optimizado_path=optimizado_path,
-        cv_scores=scores,
-        cv_status="pending_review",
-        cv_ready_at=None,
-        cv_review_note=None,
-    )
-    try:
-        notifications.notify_pending_review(session_id, data.get("candidate_name"), "cv")
-    except Exception as e:  # noqa: BLE001
-        print(f"[admin] ERROR notificando CV pendiente de revisión: {e}")
+    user_id = data.get("user_id")
+    assignment = roles.get_assignment(user_id) if user_id else None
+
+    if assignment:
+        sessions.update_session(
+            session_id,
+            cv_optimizado_path=optimizado_path,
+            cv_scores=scores,
+            cv_status="pending_review",
+            cv_ready_at=None,
+            cv_review_note=None,
+        )
+        try:
+            notifications.notify_pending_review(session_id, data.get("candidate_name"), "cv")
+        except Exception as e:  # noqa: BLE001
+            print(f"[admin] ERROR notificando CV pendiente de revisión: {e}")
+    else:
+        # Sin backoffice asignado: no hay a quién esperar, queda listo de
+        # inmediato (comunicación directa usuario-admin).
+        sessions.update_session(
+            session_id,
+            cv_optimizado_path=optimizado_path,
+            cv_scores=scores,
+            cv_status="ready",
+            cv_ready_at=datetime.now(timezone.utc).isoformat(),
+            cv_review_note=None,
+        )
     return {"status": "ok"}
 
 
@@ -440,17 +455,29 @@ async def admin_upload_vacantes(
 
     parsed = await _parse_vacantes_json(file)
 
-    sessions.update_session(
-        session_id,
-        vacantes=parsed,
-        jobs_status="pending_review",
-        jobs_ready_at=None,
-        jobs_review_note=None,
-    )
-    try:
-        notifications.notify_pending_review(session_id, data.get("candidate_name"), "vacantes")
-    except Exception as e:  # noqa: BLE001
-        print(f"[admin] ERROR notificando vacantes pendientes de revisión: {e}")
+    user_id = data.get("user_id")
+    assignment = roles.get_assignment(user_id) if user_id else None
+
+    if assignment:
+        sessions.update_session(
+            session_id,
+            vacantes=parsed,
+            jobs_status="pending_review",
+            jobs_ready_at=None,
+            jobs_review_note=None,
+        )
+        try:
+            notifications.notify_pending_review(session_id, data.get("candidate_name"), "vacantes")
+        except Exception as e:  # noqa: BLE001
+            print(f"[admin] ERROR notificando vacantes pendientes de revisión: {e}")
+    else:
+        sessions.update_session(
+            session_id,
+            vacantes=parsed,
+            jobs_status="ready",
+            jobs_ready_at=datetime.now(timezone.utc).isoformat(),
+            jobs_review_note=None,
+        )
     return {"status": "ok"}
 
 
@@ -498,13 +525,74 @@ async def admin_delete_vacantes(session_id: str, user: dict = Depends(auth.requi
 
 
 # ---------------------------------------------------------------------------
+# Endpoints de admin: gestión de usuarios, roles y asignación a backoffice.
+# Solo se listan usuarios que ya tienen al menos una sesión creada.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/admin/users")
+async def admin_list_users(user: dict = Depends(auth.require_admin)):
+    return roles.list_users_with_sessions()
+
+
+@app.post("/api/admin/users/{user_id}/role")
+async def admin_set_user_role(user_id: str, payload: dict, user: dict = Depends(auth.require_admin)):
+    role = (payload.get("role") or "").strip().lower()
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(400, "Falta email")
+    try:
+        return roles.set_role(user_id=user_id, email=email, role=role, actor_user_id=user["id"])
+    except roles.PendingProcessError as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/admin/backoffice-users")
+async def admin_backoffice_users(user: dict = Depends(auth.require_admin)):
+    return roles.list_backoffice_users()
+
+
+@app.get("/api/admin/unassigned-users")
+async def admin_unassigned_users(user: dict = Depends(auth.require_admin)):
+    return roles.list_unassigned_users()
+
+
+@app.post("/api/admin/assignments")
+async def admin_create_assignment(payload: dict, user: dict = Depends(auth.require_admin)):
+    try:
+        return roles.assign_user_to_backoffice(
+            user_id=payload.get("user_id"),
+            backoffice_user_id=payload.get("backoffice_user_id"),
+        )
+    except roles.PendingProcessError as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/admin/assignments/{user_id}")
+async def admin_delete_assignment(user_id: str, user: dict = Depends(auth.require_admin)):
+    try:
+        roles.unassign_user(user_id)
+    except roles.PendingProcessError as e:
+        raise HTTPException(409, str(e))
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
 # Endpoints de backoffice (revisa lo que sube el admin antes de que llegue al
 # candidato) — requieren permisos de backoffice (o admin, que los incluye).
+# Un backoffice normal solo ve las solicitudes de los usuarios que el admin
+# le asignó; el admin (que hereda permisos de backoffice) sigue viendo todo.
 # ---------------------------------------------------------------------------
 
 @app.get("/api/backoffice/requests")
 async def backoffice_requests(user: dict = Depends(auth.require_backoffice)):
-    return sessions.list_sessions()
+    if auth.is_admin(user):
+        return sessions.list_sessions()
+    assigned_user_ids = list(roles.list_assigned_user_ids(user["id"]))
+    return sessions.list_sessions_for_users(assigned_user_ids)
 
 
 @app.post("/api/backoffice/{session_id}/cv/approve")

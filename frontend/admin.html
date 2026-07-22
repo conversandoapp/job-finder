@@ -25,6 +25,7 @@
     <button class="tab-btn active" data-tab="requests">Solicitudes</button>
     <button class="tab-btn" data-tab="past">Solicitudes pasadas</button>
     <button class="tab-btn" data-tab="notifications">Notificaciones</button>
+    <button class="tab-btn" data-tab="users">Usuarios</button>
   </div>
 
   <div id="tab-requests">
@@ -62,6 +63,39 @@
       <p class="subtitle">Todo lo que te hubiéramos avisado por email queda registrado aquí también.</p>
     </div>
     <div id="notifications-list"></div>
+  </div>
+
+  <div id="tab-users" style="display:none;">
+    <div class="card">
+      <h2>Usuarios</h2>
+      <p class="subtitle" style="margin-bottom:0;">
+        Usuarios que ya crearon al menos una solicitud. Cambia el rol de cada
+        uno (usuario, backoffice o admin) y decide qué backoffice asesora a
+        qué usuario. Un usuario sin backoffice asignado queda en
+        comunicación directa contigo: lo que subas para él queda listo de
+        inmediato, sin pasar por aprobación.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Asignar backoffice a un usuario</h3>
+      <form id="assign-form">
+        <label class="field-label">Backoffice</label>
+        <select id="assign-backoffice-select" required>
+          <option value="">Elige un backoffice…</option>
+        </select>
+
+        <label class="field-label">Usuario a asignar (solo sin backoffice)</label>
+        <select id="assign-user-select" required>
+          <option value="">Elige un usuario…</option>
+        </select>
+
+        <button type="submit" class="btn">Asignar</button>
+        <div class="form-msg" id="assign-form-msg"></div>
+      </form>
+    </div>
+
+    <div id="users-list"></div>
   </div>
 
 </div>

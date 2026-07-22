@@ -75,6 +75,33 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now()
 );
 
+-- Rol de cada usuario (además de ADMIN_EMAIL, que sigue siendo el admin
+-- permanente de respaldo). Sin fila para un user_id => rol 'usuario' por
+-- default (o 'backoffice' si su email está en BACKOFFICE_EMAILS, fallback
+-- legacy — ver backend/services/roles.py).
+create table if not exists user_roles (
+  user_id    uuid primary key,
+  email      text not null,
+  role       text not null default 'usuario'
+               check (role in ('usuario', 'backoffice', 'admin')),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists user_roles_email_idx on user_roles (email);
+
+-- Qué backoffice revisa a qué usuario ("asesor" asignado). Un usuario
+-- tiene a lo sumo un backoffice asignado a la vez (user_id es PK).
+create table if not exists backoffice_assignments (
+  user_id            uuid primary key,
+  user_email         text not null,
+  backoffice_user_id uuid not null,
+  backoffice_email   text not null,
+  assigned_at        timestamptz not null default now()
+);
+
+create index if not exists backoffice_assignments_backoffice_user_id_idx
+  on backoffice_assignments (backoffice_user_id);
+
 -- Cambios incrementales aplicados a mano sobre una DB ya existente (el
 -- "create table if not exists" de arriba no los aplica solo):
 --   alter table sessions add column if not exists roles_sugeridos jsonb;
@@ -98,3 +125,46 @@ create table if not exists app_settings (
 --     check (jobs_status in ('not_requested', 'pending', 'pending_review', 'ready', 'error'));
 --   alter table sessions add column if not exists cv_review_note text;
 --   alter table sessions add column if not exists jobs_review_note text;
+--
+-- Roles gestionables desde /admin (pestaña "Usuarios") y asignación
+-- usuario <-> backoffice. Correr sobre la DB ya existente:
+--   create table if not exists user_roles (
+--     user_id    uuid primary key,
+--     email      text not null,
+--     role       text not null default 'usuario'
+--                  check (role in ('usuario', 'backoffice', 'admin')),
+--     updated_at timestamptz not null default now()
+--   );
+--   create index if not exists user_roles_email_idx on user_roles (email);
+--
+--   create table if not exists backoffice_assignments (
+--     user_id            uuid primary key,
+--     user_email         text not null,
+--     backoffice_user_id uuid not null,
+--     backoffice_email   text not null,
+--     assigned_at        timestamptz not null default now()
+--   );
+--   create index if not exists backoffice_assignments_backoffice_user_id_idx
+--     on backoffice_assignments (backoffice_user_id);
+--
+-- IMPORTANTE -- correr esta migración de datos ANTES de desplegar el
+-- filtro por asignación de GET /api/backoffice/requests: hoy ya hay
+-- backoffice(s) operando vía BACKOFFICE_EMAILS viendo TODAS las
+-- solicitudes; si backoffice_assignments arranca vacía, ese backoffice se
+-- queda sin ver ninguna solicitud de un día para el otro. Por cada email
+-- de BACKOFFICE_EMAILS:
+--   1. Conseguir su user_id:
+--        select id, email from auth.users where email = 'backoffice@ejemplo.com';
+--   2. Darle rol 'backoffice' explícito:
+--        insert into user_roles (user_id, email, role)
+--        values ('<uuid-paso-1>', 'backoffice@ejemplo.com', 'backoffice')
+--        on conflict (user_id) do update set role = excluded.role;
+--   3. Asignarle todos los usuarios que ya tienen sesiones (si hay más de
+--      un backoffice, repartir a mano en cambio de "select distinct on"):
+--        insert into backoffice_assignments
+--          (user_id, user_email, backoffice_user_id, backoffice_email)
+--        select distinct on (s.user_id)
+--          s.user_id, s.user_email, '<uuid-paso-1>', 'backoffice@ejemplo.com'
+--        from sessions s
+--        where s.user_id is not null
+--        on conflict (user_id) do nothing;
